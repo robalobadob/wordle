@@ -32,14 +32,14 @@ export default function App() {
   const keyState = useMemo(() => {
     const ord: Record<Mark, number> = { miss: 0, present: 1, hit: 2 };
     const best: Record<string, Mark> = {};
-    for (const ms of marks) {
-      ms.forEach((m, i) => {
-        const letter = rows[marks.indexOf(ms)]?.[i];
+    marks.forEach((ms, rowIdx) => {
+     ms.forEach((m, i) => {
+       const letter = rows[rowIdx]?.[i];
         if (!letter) return;
         const cur = best[letter];
         if (!cur || ord[m] > ord[cur]) best[letter] = m;
       });
-    }
+    });
     return best; // e.g., { A:'present', E:'hit' }
   }, [rows, marks]);
 
