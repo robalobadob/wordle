@@ -65,14 +65,30 @@ if (guessesPath && fs.existsSync(guessesPath)) {
   guessesFromFile = loadListFromFile(guessesPath);
 }
 
-// 2) Otherwise try the `wordle-words` package
+/// 2) Otherwise try the `wordle-words` package
 let answersFromPkg: string[] | null = null;
 let guessesFromPkg: string[] | null = null;
+
+type WordsPkg = {
+  allSolutions?: string[];
+  allGuesses?: string[];
+  // if the package is CommonJS, dynamic import returns { default: { … } }
+  default?: {
+    allSolutions?: string[];
+    allGuesses?: string[];
+  };
+};
+
 try {
-  const ww = require('wordle-words') as { allSolutions?: string[]; allGuesses?: string[] };
+  const mod: WordsPkg = await import('wordle-words');
+  const ww = mod.default ?? mod;
+
   if (ww.allSolutions) answersFromPkg = normalizeList(ww.allSolutions);
   if (ww.allGuesses)   guessesFromPkg = normalizeList(ww.allGuesses);
-} catch { /* optional dep */ }
+} catch {
+  /* optional dep */
+}
+
 
 // 3) Choose final lists (all lowercase by construction)
 if (answersFromFile?.length) {
