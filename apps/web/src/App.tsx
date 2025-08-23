@@ -216,7 +216,15 @@ function Keyboard({ keyState, onKey }: {
     ['ENTER', ...'ZXCVBNM'.split(''), 'DEL']
   ];
   return (
-    <div className="kb" role="group" aria-label="Keyboard">
+    <div
+      className="kb"
+      role="group"
+      aria-label="Keyboard"
+      onKeyDownCapture={(e) => {
+        // If a keyboard button is focused, prevent its Enter from also hitting window
+        if (e.key === 'Enter') e.stopPropagation();
+      }}
+    >
       {rows.map((r, i) => (
         <div className="krow" key={i}>
           {r.map(k => {
@@ -236,3 +244,4 @@ function Keyboard({ keyState, onKey }: {
     </div>
   );
 }
+
