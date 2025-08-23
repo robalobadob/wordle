@@ -104,6 +104,17 @@ select,button,input{
   transition: opacity .2s ease;
 }
 .toast.show { opacity: 1; }
+/* invalid word feedback */
+@keyframes tile-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+.row.shake .tile {
+  animation: tile-shake 0.4s ease both;
+}
+
 
 
 /* =========================================================
