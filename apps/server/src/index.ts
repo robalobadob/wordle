@@ -69,7 +69,6 @@ if (guessesPath && fs.existsSync(guessesPath)) {
 let answersFromPkg: string[] | null = null;
 let guessesFromPkg: string[] | null = null;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const ww = require('wordle-words') as { allSolutions?: string[]; allGuesses?: string[] };
   if (ww.allSolutions) answersFromPkg = normalizeList(ww.allSolutions);
   if (ww.allGuesses)   guessesFromPkg = normalizeList(ww.allGuesses);
