@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Mark } from '@wordle/game-core';
 import './styles.css';
 
@@ -25,6 +25,8 @@ export default function App() {
   const [marks, setMarks] = useState<Mark[][]>([]);
   // current input
   const [guess, setGuess] = useState('');
+
+  const submittingRef = useRef(false);
 
   // derived keyboard coloring
   const keyState = useMemo(() => {
@@ -74,6 +76,13 @@ export default function App() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (state !== 'playing') return;
+
+      // prevent default submit/click behavior
+      if (e.key === 'Enter' || e.key === 'Backspace') e.preventDefault();
+
+      // ignore auto-repeat (holding a key)
+      if (e.repeat) return;
+
       if (e.key === 'Enter') { submit(); return; }
       if (e.key === 'Backspace') { setGuess(g => g.slice(0, -1)); return; }
       const k = e.key.toUpperCase();
@@ -84,7 +93,8 @@ export default function App() {
   }, [state, guess.length]);
 
   async function submit() {
-    if (!gameId || guess.length !== COLS) return;
+    if (!gameId || guess.length !== COLS || submittingRef.current) return;
+    submittingRef.current = true;
     try {
       const r = await fetch(`${API}/api/guess`, {
         method: 'POST',
@@ -106,6 +116,8 @@ export default function App() {
       setState(data.state);
     } catch (e: any) {
       setErr(e.message ?? String(e));
+    } finally {
+      submittingRef.current = false;
     }
   }
 
