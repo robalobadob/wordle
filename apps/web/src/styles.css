@@ -1,3 +1,6 @@
+/* =========================================================
+   THEME
+   --------------------------------------------------------- */
 :root{
   --hit:#6aaa64;     /* green */
   --present:#c9b458; /* yellow */
@@ -6,12 +9,113 @@
 }
 .cb { --hit:#85c0f9; --present:#f5793a; } /* color-blind alt */
 
-.app { max-width:480px; margin:40px auto; font-family:system-ui, sans-serif; }
+
+/* =========================================================
+   GLOBAL LAYOUT
+   --------------------------------------------------------- */
+.app {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  font-family: system-ui, sans-serif;
+}
+
+/* shell holds everything: header, toast, board, banner, keyboard */
+.shell {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  align-items: center;
+  justify-items: center;
+  gap: 1rem;
+  width: min(92vw, 900px);
+  padding: 1rem 1.25rem 2rem;
+}
+
+
+/* =========================================================
+   HEADER
+   --------------------------------------------------------- */
+.header {
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: .5rem;
+  width: 100%;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  letter-spacing: .02em;
+}
+
+.controls {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.control {
+  display: inline-flex;
+  gap: .5rem;
+  align-items: center;
+  font-size: .95rem;
+}
+.control .label { opacity: .7; }
+.switch input { margin-right: .35rem; }
+
+/* keep your original control look */
+select,button,input{
+  padding:8px 10px;
+  border:1px solid #ddd;
+  border-radius:6px;
+  background: white;
+}
+
+/* generic button variants */
+.btn {
+  border: 1px solid #ddd;
+  background: white;
+  padding: .45rem .8rem;
+  border-radius: .5rem;
+  cursor: pointer;
+}
+.btn:hover { background: #f3f3f3; }
+.btn.ghost { background: transparent; border-color: #ccc; }
+
+/* (Legacy) old .hbar layout can remain; no harm if unused */
 .hbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
-select,button,input{ padding:8px 10px; border:1px solid #ddd; border-radius:6px; }
+
+
+/* =========================================================
+   TOAST (inline error)
+   --------------------------------------------------------- */
+.toast{
+  color:#b00020;
+  margin:6px 0;
+  min-height:1.2em;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.toast.show { opacity: 1; }
+
+
+/* =========================================================
+   BOARD
+   --------------------------------------------------------- */
+.main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
 
 .board{ display:grid; gap:8px; margin:16px 0 6px; }
 .row{ display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+
 .tile{
   height:56px; border:2px solid var(--tile);
   display:grid; place-items:center; font-weight:700; font-size:22px;
@@ -22,11 +126,43 @@ select,button,input{ padding:8px 10px; border:1px solid #ddd; border-radius:6px;
 .tile.present{ background:var(--present); color:#fff; border-color:var(--present); }
 .tile.miss{ background:var(--miss); color:#fff; border-color:var(--miss); }
 
-.kb{ display:grid; gap:6px; grid-template-rows:repeat(3,40px); margin-top:8px; }
+
+/* =========================================================
+   END-STATE BANNER (only shown on won/lost)
+   --------------------------------------------------------- */
+.banner {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.banner-content {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  justify-content: center;
+  padding: .75rem 1rem;
+  border-radius: .6rem;
+  font-weight: 600;
+}
+.banner.won .banner-content {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+}
+.banner.lost .banner-content {
+  background: #ffebee;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+
+
+/* =========================================================
+   KEYBOARD
+   --------------------------------------------------------- */
+.kb{ display:grid; gap:6px; grid-template-rows:repeat(3,40px); margin-top:8px; width: min(92vw, 700px); }
 .krow{ display:flex; gap:6px; justify-content:center; }
 .key{ min-width:32px; padding:0 10px; border:0; border-radius:6px; background:#d3d6da; font-weight:600; }
 .key.hit{ background:var(--hit); color:#fff; }
 .key.present{ background:var(--present); color:#fff; }
 .key.miss{ background:var(--miss); color:#fff; }
 .key.wide{ min-width:64px; }
-.toast{ color:#b00020; margin:6px 0; min-height:1.2em; }
