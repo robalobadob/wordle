@@ -1,10 +1,12 @@
 export type Mark = 'hit' | 'present' | 'miss';
 
 export function scoreGuess(answer: string, guess: string): Mark[] {
-  const A = answer.toUpperCase();
-  const G = guess.toUpperCase();
+  const A = answer.toLowerCase();
+  const G = guess.toLowerCase();
   if (A.length !== 5 || G.length !== 5) throw new Error('Words must be 5 letters');
-  if (!/^[A-Z]{5}$/.test(A) || !/^[A-Z]{5}$/.test(G)) throw new Error('Only A–Z letters');
+  if (!/^[a-z]{5}$/.test(A) || !/^[a-z]{5}$/.test(G)) {
+    throw new Error('Only a–z letters allowed');
+  }
 
   const marks: Mark[] = Array(5).fill('miss');
   const counts: Record<string, number> = {};
