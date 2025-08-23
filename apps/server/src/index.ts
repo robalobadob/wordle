@@ -133,6 +133,52 @@ function pickAnswer(seed?: string): string {
   return list[Math.abs(h) % list.length];
 }
 
+// Safe, defensive alternative to nextCheatingCandidates.
+// Never throws; filters invalid candidates; falls back to a reasonable result.
+function safeNextCheatingCandidates(
+  candidates: string[],
+  guess: string
+): { next: string[]; marks: ReturnType<typeof scoreGuess> } {
+  // keep only valid 5-letter lowercase strings
+  const valid = Array.isArray(candidates)
+    ? candidates.filter((w) => typeof w === 'string' && /^[a-z]{5}$/.test(w))
+    : [];
+
+  const buckets = new Map<
+    string,
+    { marks: ReturnType<typeof scoreGuess>; words: string[] }
+  >();
+
+  for (const ans of valid) {
+    try {
+      const m = scoreGuess(ans, guess);
+      const key = m.join(','); // key by pattern
+      const bucket = buckets.get(key);
+      if (bucket) bucket.words.push(ans);
+      else buckets.set(key, { marks: m, words: [ans] });
+    } catch {
+      // skip any bad candidate instead of crashing
+      continue;
+    }
+  }
+
+  if (buckets.size === 0) {
+    // No valid candidates -> return "all miss" mask and empty pool
+    const miss = Array.from({ length: guess.length }, () => 'miss') as ReturnType<
+      typeof scoreGuess
+    >;
+    return { next: [], marks: miss };
+  }
+
+  // pick the largest bucket (max ambiguity)
+  let best: { marks: ReturnType<typeof scoreGuess>; words: string[] } | null = null;
+  for (const b of buckets.values()) {
+    if (!best || b.words.length > best.words.length) best = b;
+  }
+  return { next: best!.words, marks: best!.marks };
+}
+
+
 /**
  * ---- Routes ----------------------------------------------------------------
  */
@@ -189,42 +235,47 @@ app.post('/api/guess', (req, res) => {
     const cg = game as CheatingGame;
 
     try {
-      if (!cg.finalized) {
+        if (!cg.finalized) {
         if (!Array.isArray(cg.candidates)) {
-          log.error({ gameId, lo, cg }, 'Cheat mode: candidates not an array');
-          return res.status(500).json({ error: 'Cheat mode internal state invalid' });
+            log.error({ gameId, lo, cg }, 'Cheat mode: candidates not an array');
+            return res.status(500).json({ error: 'Cheat mode internal state invalid' });
         }
 
-        const { next, marks: m } = nextCheatingCandidates(cg.candidates, lo);
+        let next: string[]; let m: ReturnType<typeof scoreGuess>;
+
+        try {
+            // Try the primary algorithm from game-core first
+            const resNc = nextCheatingCandidates(cg.candidates, lo);
+            next = resNc.next; m = resNc.marks;
+        } catch (err) {
+            // Fallback: never throw
+            log.warn({ err, gameId, lo, count: cg.candidates.length }, 'Cheat mode: primary algo failed; using safe fallback');
+            const resSafe = safeNextCheatingCandidates(cg.candidates, lo);
+            next = resSafe.next; m = resSafe.marks;
+        }
+
         marks = m;
         cg.candidates = next;
 
         log.debug({ gameId, guess: lo, nextCount: next.length }, 'Cheat mode narrowed candidates');
 
         if (cg.candidates.length === 0) {
-          // No possible answers remain after this guess: return marks, keep playing/lost by rounds.
-          // Do NOT crash; surface a clear client error for UX.
-          log.warn({ gameId, lastGuess: lo }, 'Cheat mode: no candidates remain');
-          // You can choose to auto-lose here; we keep normal round/loss logic:
-          // (game.state updated by maxRounds check below)
+            log.warn({ gameId, lastGuess: lo }, 'Cheat mode: no candidates remain');
+            // keep playing; round-limit will determine loss
         } else if (cg.candidates.length === 1) {
-          cg.finalized = cg.candidates[0];
-          log.info({ gameId, finalized: cg.finalized }, 'Cheat mode finalized answer');
+            cg.finalized = cg.candidates[0];
+            log.info({ gameId, finalized: cg.finalized }, 'Cheat mode finalized answer');
         }
-      } else {
+        } else {
         // Once finalized, score like normal
-        if (!cg.finalized) {
-          log.error({ gameId }, 'Cheat mode: finalized missing unexpectedly');
-          return res.status(500).json({ error: 'Cheat mode internal state invalid (finalized)' });
-        }
         marks = scoreGuess(cg.finalized, lo);
         if (marks.every((m) => m === 'hit')) game.state = 'won';
-      }
+        }
     } catch (err) {
-      log.error({ err, gameId, lo, game }, 'Cheat mode scoring failed');
-      return res.status(500).json({ error: 'Cheating mode failed' });
+        log.error({ err, gameId, lo, game }, 'Cheat mode scoring failed');
+        return res.status(500).json({ error: 'Cheating mode failed' });
     }
-  }
+    }
 
   if (game.state !== 'won' && game.round >= game.maxRounds) game.state = 'lost';
 
