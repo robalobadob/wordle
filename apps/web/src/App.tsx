@@ -112,7 +112,7 @@ export default function App() {
 
         setErr(msg);
         // trigger row shake for invalid word feedback
-        const rowEl = document.querySelectorAll('.row')[rows.length] as HTMLElement | null;
+        const rowEl = document.querySelectorAll<HTMLElement>('.row')[rows.length] ?? null;
         rowEl?.classList.add('shake');
         setTimeout(() => rowEl?.classList.remove('shake'), 400);
 
