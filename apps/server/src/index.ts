@@ -11,12 +11,7 @@ import {
   nextCheatingCandidates,
   ANSWERS as DEFAULT_ANSWERS,
 } from '@wordle/game-core';
-import {
-  newGameReq,
-  newGameRes,
-  guessReq,
-  guessRes,
-} from '@wordle/protocol';
+import { newGameReq, newGameRes, guessReq, guessRes } from '@wordle/protocol';
 
 const log = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 const app = express();
@@ -32,12 +27,14 @@ app.use(express.json());
  */
 const toLower5 = (w: string) => w.trim().toLowerCase();
 const normalizeList = (arr: unknown): string[] | null =>
-  Array.isArray(arr) && arr.every(w => typeof w === 'string' && /^[A-Za-z]{5}$/.test(w))
+  Array.isArray(arr) &&
+  arr.every((w) => typeof w === 'string' && /^[A-Za-z]{5}$/.test(w))
     ? (arr as string[]).map(toLower5)
     : null;
 
 // Defaults (normalized)
-let ANSWERS: string[] = normalizeList(DEFAULT_ANSWERS) ?? DEFAULT_ANSWERS.map(toLower5);
+let ANSWERS: string[] =
+  normalizeList(DEFAULT_ANSWERS) ?? DEFAULT_ANSWERS.map(toLower5);
 let GUESSES: Set<string> | null = null;
 
 // One-arg file loader (returns lowercase list or null)
@@ -84,11 +81,10 @@ try {
   const ww = mod.default ?? mod;
 
   if (ww.allSolutions) answersFromPkg = normalizeList(ww.allSolutions);
-  if (ww.allGuesses)   guessesFromPkg = normalizeList(ww.allGuesses);
+  if (ww.allGuesses) guessesFromPkg = normalizeList(ww.allGuesses);
 } catch {
   /* optional dep */
 }
-
 
 // 3) Choose final lists (all lowercase by construction)
 if (answersFromFile?.length) {
@@ -149,7 +145,7 @@ function pickAnswer(seed?: string): string {
 // Never throws; filters invalid candidates; falls back to a reasonable result.
 function safeNextCheatingCandidates(
   candidates: string[],
-  guess: string
+  guess: string,
 ): { next: string[]; marks: ReturnType<typeof scoreGuess> } {
   // keep only valid 5-letter lowercase strings
   const valid = Array.isArray(candidates)
@@ -176,20 +172,21 @@ function safeNextCheatingCandidates(
 
   if (buckets.size === 0) {
     // No valid candidates -> return "all miss" mask and empty pool
-    const miss = Array.from({ length: guess.length }, () => 'miss') as ReturnType<
-      typeof scoreGuess
-    >;
+    const miss = Array.from(
+      { length: guess.length },
+      () => 'miss',
+    ) as ReturnType<typeof scoreGuess>;
     return { next: [], marks: miss };
   }
 
   // pick the largest bucket (max ambiguity)
-  let best: { marks: ReturnType<typeof scoreGuess>; words: string[] } | null = null;
+  let best: { marks: ReturnType<typeof scoreGuess>; words: string[] } | null =
+    null;
   for (const b of buckets.values()) {
     if (!best || b.words.length > best.words.length) best = b;
   }
   return { next: best!.words, marks: best!.marks };
 }
-
 
 /**
  * ---- Routes ----------------------------------------------------------------
@@ -203,9 +200,23 @@ app.post('/api/new', (req, res) => {
 
   let game: GameState;
   if (mode === 'normal') {
-    game = { id, mode, maxRounds, round: 0, state: 'playing', answer: pickAnswer(seed) };
+    game = {
+      id,
+      mode,
+      maxRounds,
+      round: 0,
+      state: 'playing',
+      answer: pickAnswer(seed),
+    };
   } else {
-    game = { id, mode, maxRounds, round: 0, state: 'playing', candidates: [...ANSWERS] };
+    game = {
+      id,
+      mode,
+      maxRounds,
+      round: 0,
+      state: 'playing',
+      candidates: [...ANSWERS],
+    };
   }
 
   games.set(id, game);
@@ -219,16 +230,19 @@ app.post('/api/guess', (req, res) => {
   const { gameId, guess } = parsed.data;
   const game = games.get(gameId);
   if (!game) return res.status(404).json({ error: 'Game not found' });
-  if (game.state !== 'playing') return res.status(409).json({ error: 'Game finished' });
+  if (game.state !== 'playing')
+    return res.status(409).json({ error: 'Game finished' });
 
-    const lo = guess.toLowerCase();
-    if (!/^[a-z]{5}$/.test(lo)) return res.status(400).json({ error: 'Invalid format' });
+  const lo = guess.toLowerCase();
+  if (!/^[a-z]{5}$/.test(lo))
+    return res.status(400).json({ error: 'Invalid format' });
 
-    const enforceDict = !(process.env.CHEAT_ALLOW_ANY === '1' && game.mode === 'cheat');
-    if (enforceDict && GUESSES && !GUESSES.has(lo)) {
+  const enforceDict = !(
+    process.env.CHEAT_ALLOW_ANY === '1' && game.mode === 'cheat'
+  );
+  if (enforceDict && GUESSES && !GUESSES.has(lo)) {
     return res.status(400).json({ error: 'Not in word list' });
-    }
-
+  }
 
   game.round += 1;
 
@@ -247,47 +261,64 @@ app.post('/api/guess', (req, res) => {
     const cg = game as CheatingGame;
 
     try {
-        if (!cg.finalized) {
+      if (!cg.finalized) {
         if (!Array.isArray(cg.candidates)) {
-            log.error({ gameId, lo, cg }, 'Cheat mode: candidates not an array');
-            return res.status(500).json({ error: 'Cheat mode internal state invalid' });
+          log.error({ gameId, lo, cg }, 'Cheat mode: candidates not an array');
+          return res
+            .status(500)
+            .json({ error: 'Cheat mode internal state invalid' });
         }
 
-        let next: string[]; let m: ReturnType<typeof scoreGuess>;
+        let next: string[];
+        let m: ReturnType<typeof scoreGuess>;
 
         try {
-            // Try the primary algorithm from game-core first
-            const resNc = nextCheatingCandidates(cg.candidates, lo);
-            next = resNc.next; m = resNc.marks;
+          // Try the primary algorithm from game-core first
+          const resNc = nextCheatingCandidates(cg.candidates, lo);
+          next = resNc.next;
+          m = resNc.marks;
         } catch (err) {
-            // Fallback: never throw
-            log.warn({ err, gameId, lo, count: cg.candidates.length }, 'Cheat mode: primary algo failed; using safe fallback');
-            const resSafe = safeNextCheatingCandidates(cg.candidates, lo);
-            next = resSafe.next; m = resSafe.marks;
+          // Fallback: never throw
+          log.warn(
+            { err, gameId, lo, count: cg.candidates.length },
+            'Cheat mode: primary algo failed; using safe fallback',
+          );
+          const resSafe = safeNextCheatingCandidates(cg.candidates, lo);
+          next = resSafe.next;
+          m = resSafe.marks;
         }
 
         marks = m;
         cg.candidates = next;
 
-        log.debug({ gameId, guess: lo, nextCount: next.length }, 'Cheat mode narrowed candidates');
+        log.debug(
+          { gameId, guess: lo, nextCount: next.length },
+          'Cheat mode narrowed candidates',
+        );
 
         if (cg.candidates.length === 0) {
-            log.warn({ gameId, lastGuess: lo }, 'Cheat mode: no candidates remain');
-            // keep playing; round-limit will determine loss
+          log.warn(
+            { gameId, lastGuess: lo },
+            'Cheat mode: no candidates remain',
+          );
+          // keep playing; round-limit will determine loss
         } else if (cg.candidates.length === 1) {
-            cg.finalized = cg.candidates[0];
-            log.info({ gameId, finalized: cg.finalized }, 'Cheat mode finalized answer');
+          cg.finalized = cg.candidates[0];
+          log.info(
+            { gameId, finalized: cg.finalized },
+            'Cheat mode finalized answer',
+          );
         }
-        } else {
+      } else {
         // Once finalized, score like normal
         marks = scoreGuess(cg.finalized, lo);
         if (marks.every((m) => m === 'hit')) game.state = 'won';
-        }
+      }
     } catch (err) {
-        log.error({ err, gameId, lo, game }, 'Cheat mode scoring failed');
-        return res.status(500).json({ error: 'Cheating mode failed' });
+      log.error({ err, gameId, lo, game }, 'Cheat mode scoring failed');
+      return res.status(500).json({ error: 'Cheating mode failed' });
     }
-    }
+  }
 
   if (game.state !== 'won' && game.round >= game.maxRounds) game.state = 'lost';
 

@@ -4,17 +4,20 @@ import './styles.css';
 
 type Mode = 'normal' | 'cheat';
 const API = import.meta.env.VITE_API_URL as string;
-const ROWS = 6, COLS = 5;
+const ROWS = 6,
+  COLS = 5;
 
 type State = 'idle' | 'playing' | 'won' | 'lost' | 'error';
 
 const MODE_TITLES: Record<Mode, string> = {
   normal: 'Classic Wordle',
-  cheat: 'Cheating Host'
+  cheat: 'Cheating Host',
 };
 
 export default function App() {
-  const [mode, setMode] = useState<Mode>(() => (localStorage.getItem('mode') as Mode) || 'normal');
+  const [mode, setMode] = useState<Mode>(
+    () => (localStorage.getItem('mode') as Mode) || 'normal',
+  );
   const [cb, setCb] = useState(() => localStorage.getItem('cb') === '1'); // color-blind
   const [gameId, setGameId] = useState<string | null>(null);
   const [state, setState] = useState<State>('idle');
@@ -33,8 +36,8 @@ export default function App() {
     const ord: Record<Mark, number> = { miss: 0, present: 1, hit: 2 };
     const best: Record<string, Mark> = {};
     marks.forEach((ms, rowIdx) => {
-     ms.forEach((m, i) => {
-       const letter = rows[rowIdx]?.[i];
+      ms.forEach((m, i) => {
+        const letter = rows[rowIdx]?.[i];
         if (!letter) return;
         const cur = best[letter];
         if (!cur || ord[m] > ord[cur]) best[letter] = m;
@@ -50,7 +53,7 @@ export default function App() {
       const r = await fetch(`${API}/api/new`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: m, maxRounds: ROWS })
+        body: JSON.stringify({ mode: m, maxRounds: ROWS }),
       });
       if (!r.ok) throw new Error(`/api/new ${r.status}`);
       const data = await r.json();
@@ -66,7 +69,9 @@ export default function App() {
     }
   }
 
-  useEffect(() => { if (API) newGame(mode); }, []); // initial
+  useEffect(() => {
+    if (API) newGame(mode);
+  }, []); // initial
 
   // keep document title in sync with mode
   useEffect(() => {
@@ -84,10 +89,16 @@ export default function App() {
       // ignore auto-repeat (holding a key)
       if (e.repeat) return;
 
-      if (e.key === 'Enter') { submit(); return; }
-      if (e.key === 'Backspace') { setGuess(g => g.slice(0, -1)); return; }
+      if (e.key === 'Enter') {
+        submit();
+        return;
+      }
+      if (e.key === 'Backspace') {
+        setGuess((g) => g.slice(0, -1));
+        return;
+      }
       const k = e.key.toUpperCase();
-      if (/^[A-Z]$/.test(k) && guess.length < COLS) setGuess(g => g + k);
+      if (/^[A-Z]$/.test(k) && guess.length < COLS) setGuess((g) => g + k);
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -100,19 +111,21 @@ export default function App() {
       const r = await fetch(`${API}/api/guess`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gameId, guess })
+        body: JSON.stringify({ gameId, guess }),
       });
       if (!r.ok) {
         const text = (await r.text()).trim();
         // Normalize message
-        const msg =
-          /not in word list/i.test(text) ? 'Not in word list' :
-          /invalid format/i.test(text) ? 'Enter a valid 5‑letter word' :
-          text || `Error ${r.status}`;
+        const msg = /not in word list/i.test(text)
+          ? 'Not in word list'
+          : /invalid format/i.test(text)
+            ? 'Enter a valid 5‑letter word'
+            : text || `Error ${r.status}`;
 
         setErr(msg);
         // trigger row shake for invalid word feedback
-        const rowEl = document.querySelectorAll<HTMLElement>('.row')[rows.length] ?? null;
+        const rowEl =
+          document.querySelectorAll<HTMLElement>('.row')[rows.length] ?? null;
         rowEl?.classList.add('shake');
         setTimeout(() => rowEl?.classList.remove('shake'), 400);
 
@@ -120,9 +133,13 @@ export default function App() {
         return;
       }
 
-      const data = await r.json() as { marks: Mark[]; round: number; state: State };
-      setRows(rs => [...rs, guess.toUpperCase()]);
-      setMarks(ms => [...ms, data.marks]);
+      const data = (await r.json()) as {
+        marks: Mark[];
+        round: number;
+        state: State;
+      };
+      setRows((rs) => [...rs, guess.toUpperCase()]);
+      setMarks((ms) => [...ms, data.marks]);
       setGuess('');
       setState(data.state);
     } catch (e: unknown) {
@@ -136,12 +153,13 @@ export default function App() {
   function onKeyClick(k: string) {
     if (state !== 'playing') return;
     if (k === 'ENTER') return void submit();
-    if (k === 'DEL') return setGuess(g => g.slice(0, -1));
-    if (guess.length < COLS && /^[A-Z]$/.test(k)) setGuess(g => g + k);
+    if (k === 'DEL') return setGuess((g) => g.slice(0, -1));
+    if (guess.length < COLS && /^[A-Z]$/.test(k)) setGuess((g) => g + k);
   }
 
   const showBanner = state === 'won' || state === 'lost';
-  const bannerText = state === 'won' ? 'You won!' : state === 'lost' ? 'You lost' : '';
+  const bannerText =
+    state === 'won' ? 'You won!' : state === 'lost' ? 'You lost' : '';
 
   return (
     <div className={`app ${cb ? 'cb' : ''}`}>
@@ -157,7 +175,8 @@ export default function App() {
                 value={mode}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   const m = e.target.value as Mode;
-                  setMode(m); localStorage.setItem('mode', m);
+                  setMode(m);
+                  localStorage.setItem('mode', m);
                   newGame(m);
                 }}
               >
@@ -166,7 +185,9 @@ export default function App() {
               </select>
             </label>
 
-            <button className="btn" onClick={() => newGame(mode)}>New Game</button>
+            <button className="btn" onClick={() => newGame(mode)}>
+              New Game
+            </button>
 
             <label className="control switch" title="Color-blind palette">
               <input
@@ -183,21 +204,39 @@ export default function App() {
         </header>
 
         {/* Toast */}
-        <div className={`toast ${err ? 'show' : ''}`} role="status" aria-live="polite">{err ?? ''}</div>
+        <div
+          className={`toast ${err ? 'show' : ''}`}
+          role="status"
+          aria-live="polite"
+        >
+          {err ?? ''}
+        </div>
 
         {/* Board */}
         <main className="main">
-          <div className="board" style={{ gridTemplateRows: `repeat(${ROWS}, 1fr)` }}>
+          <div
+            className="board"
+            style={{ gridTemplateRows: `repeat(${ROWS}, 1fr)` }}
+          >
             {Array.from({ length: ROWS }).map((_, r) => {
-              const g = rows[r] ?? (r === rows.length ? guess.toUpperCase() : '');
+              const g =
+                rows[r] ?? (r === rows.length ? guess.toUpperCase() : '');
               const m = marks[r];
               return (
                 <div className="row" key={r}>
                   {Array.from({ length: COLS }).map((__, c) => {
                     const letter = g[c] ?? '';
                     const status: Mark | '' = m?.[c] ?? '';
-                    const cls = status ? `tile ${status}` : letter ? 'tile filled' : 'tile';
-                    return <div key={c} className={cls}>{letter}</div>;
+                    const cls = status
+                      ? `tile ${status}`
+                      : letter
+                        ? 'tile filled'
+                        : 'tile';
+                    return (
+                      <div key={c} className={cls}>
+                        {letter}
+                      </div>
+                    );
                   })}
                 </div>
               );
@@ -210,7 +249,9 @@ export default function App() {
           <div className={`banner ${state}`}>
             <div className="banner-content">
               <strong>{bannerText}</strong>
-              <button className="btn ghost" onClick={() => newGame(mode)}>Play again</button>
+              <button className="btn ghost" onClick={() => newGame(mode)}>
+                Play again
+              </button>
             </div>
           </div>
         )}
@@ -222,13 +263,17 @@ export default function App() {
   );
 }
 
-function Keyboard({ keyState, onKey }: {
-  keyState: Record<string, Mark>, onKey: (k: string) => void
+function Keyboard({
+  keyState,
+  onKey,
+}: {
+  keyState: Record<string, Mark>;
+  onKey: (k: string) => void;
 }) {
   const rows = [
     'QWERTYUIOP'.split(''),
     'ASDFGHJKL'.split(''),
-    ['ENTER', ...'ZXCVBNM'.split(''), 'DEL']
+    ['ENTER', ...'ZXCVBNM'.split(''), 'DEL'],
   ];
   return (
     <div
@@ -242,16 +287,18 @@ function Keyboard({ keyState, onKey }: {
     >
       {rows.map((r, i) => (
         <div className="krow" key={i}>
-          {r.map(k => {
+          {r.map((k) => {
             const st = keyState[k] ?? '';
-            const wide = (k === 'ENTER' || k === 'DEL') ? 'wide' : '';
+            const wide = k === 'ENTER' || k === 'DEL' ? 'wide' : '';
             return (
               <button
                 key={k}
                 className={`key ${st} ${wide}`}
                 onClick={() => onKey(k)}
                 aria-label={k}
-              >{k}</button>
+              >
+                {k}
+              </button>
             );
           })}
         </div>
@@ -259,4 +306,3 @@ function Keyboard({ keyState, onKey }: {
     </div>
   );
 }
-

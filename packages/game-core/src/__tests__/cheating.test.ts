@@ -20,7 +20,12 @@ function maxBucketSize(candidates: string[], guess: string): number {
 
 /** Ensure all words in arr are 5-letter lowercase strings. */
 function isWordArray(arr: unknown): arr is string[] {
-  return Array.isArray(arr) && arr.every(s => typeof s === 'string' && s.length === 5 && /^[a-z]+$/.test(s));
+  return (
+    Array.isArray(arr) &&
+    arr.every(
+      (s) => typeof s === 'string' && s.length === 5 && /^[a-z]+$/.test(s),
+    )
+  );
 }
 
 /** Normalize possible return shapes from nextCheatingCandidates() to string[]. */
@@ -31,7 +36,8 @@ function normalizeCandidates(ret: unknown): string[] {
     // choose the largest array value
     let best: string[] = [];
     for (const arr of ret.values()) {
-      if (Array.isArray(arr) && arr.length >= best.length) best = arr as string[];
+      if (Array.isArray(arr) && arr.length >= best.length)
+        best = arr as string[];
     }
     return best;
   }
@@ -39,14 +45,24 @@ function normalizeCandidates(ret: unknown): string[] {
     const r = ret as Record<string, unknown>;
 
     // Try obvious keys
-    for (const k of ['candidates','words','bucket','best','next','result','partition','value']) {
+    for (const k of [
+      'candidates',
+      'words',
+      'bucket',
+      'best',
+      'next',
+      'result',
+      'partition',
+      'value',
+    ]) {
       const v = r[k];
       if (isWordArray(v)) return v;
-      if (v && typeof v === 'object' && isWordArray((v as any).words)) return (v as any).words;
+      if (v && typeof v === 'object' && isWordArray((v as any).words))
+        return (v as any).words;
     }
 
     // Try bucketed shapes
-    for (const k of ['buckets','partitions','byMask','groups']) {
+    for (const k of ['buckets', 'partitions', 'byMask', 'groups']) {
       const v = r[k] as Record<string, unknown> | undefined;
       if (v && typeof v === 'object') {
         let best: string[] = [];
@@ -81,7 +97,9 @@ describe('nextCheatingCandidates (cheating mode)', () => {
     expect(next.length).toBeGreaterThan(0);
 
     // All masks equal
-    const masks = new Set(next.map(w => maskKey(scoreGuess(w, guess) as Mark[])));
+    const masks = new Set(
+      next.map((w) => maskKey(scoreGuess(w, guess) as Mark[])),
+    );
     expect(masks.size).toBe(1);
 
     // Maximal size among all partitions
@@ -96,7 +114,9 @@ describe('nextCheatingCandidates (cheating mode)', () => {
 
     expect(isWordArray(after1)).toBe(true);
     expect(after1.length).toBeGreaterThan(0);
-    expect(new Set(after1.map(w => maskKey(scoreGuess(w, g1) as Mark[]))).size).toBe(1);
+    expect(
+      new Set(after1.map((w) => maskKey(scoreGuess(w, g1) as Mark[]))).size,
+    ).toBe(1);
     expect(after1.length).toBe(maxBucketSize(dict, g1));
 
     const g2 = 'grace';
@@ -105,7 +125,9 @@ describe('nextCheatingCandidates (cheating mode)', () => {
 
     expect(isWordArray(after2)).toBe(true);
     expect(after2.length).toBeGreaterThan(0);
-    expect(new Set(after2.map(w => maskKey(scoreGuess(w, g2) as Mark[]))).size).toBe(1);
+    expect(
+      new Set(after2.map((w) => maskKey(scoreGuess(w, g2) as Mark[]))).size,
+    ).toBe(1);
     expect(after2.length).toBe(maxBucketSize(after1, g2));
   });
 });
