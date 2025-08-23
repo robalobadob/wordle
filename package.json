@@ -10,7 +10,9 @@
     "dev": "concurrently -n server,web -c auto \"npm run -w @wordle/server dev\" \"npm run -w @wordle/web dev\"",
     "build": "npm run -w @wordle/game-core build && npm run -w @wordle/protocol build && npm run -w @wordle/server build && npm run -w @wordle/web build",
     "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx,.js --fix",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "npm run -ws test --if-present"
   },
   "devDependencies": {
