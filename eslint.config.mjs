@@ -20,14 +20,13 @@ export default [
 
   // Your project rules (add/override here)
   {
-    files: ['**/*.{ts,tsx,js}'],
+    files: ['**/__tests__/**/*.{ts,tsx}', '**/*.test.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
     },
     rules: {
-      // Example: allow console in server code during dev
-      // 'no-console': ['warn', { allow: ['warn', 'error'] }],
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
 
