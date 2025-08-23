@@ -30,38 +30,67 @@ app.use(express.json());
  * GUESSES: optional set of allowed guesses. If provided via GUESSES_FILE,
  *          server enforces membership. If null, accepts any 5-letter A–Z.
  */
-let ANSWERS: string[] = DEFAULT_ANSWERS;
+const toLower5 = (w: string) => w.trim().toLowerCase();
+const normalizeList = (arr: unknown): string[] | null =>
+  Array.isArray(arr) && arr.every(w => typeof w === 'string' && /^[A-Za-z]{5}$/.test(w))
+    ? (arr as string[]).map(toLower5)
+    : null;
+
+// Defaults (normalized)
+let ANSWERS: string[] = normalizeList(DEFAULT_ANSWERS) ?? DEFAULT_ANSWERS.map(toLower5);
 let GUESSES: Set<string> | null = null;
 
-function loadListFromFile(path: string, label: string): string[] | null {
+// Optional: allow any 5-letter in cheat mode even if GUESSES is set
+const CHEAT_ALLOW_ANY = process.env.CHEAT_ALLOW_ANY === '1';
+
+// One-arg file loader (returns lowercase list or null)
+function loadListFromFile(path: string): string[] | null {
   try {
     const raw = fs.readFileSync(path, 'utf8');
     const arr = JSON.parse(raw);
-    if (
-      Array.isArray(arr) &&
-      arr.every((w: unknown) => typeof w === 'string' && /^[A-Za-z]{5}$/.test(w as string))
-    ) {
-      const list = (arr as string[]).map((w) => w.toUpperCase());
-      log.info({ count: list.length, file: path }, `Loaded ${label}`);
-      return list;
-    }
-    log.warn({ file: path }, `${label} file is not a valid array of 5-letter words`);
-  } catch (err) {
-    log.warn({ err, file: path }, `Failed to load ${label} file`);
+    return normalizeList(arr);
+  } catch {
+    return null;
   }
-  return null;
 }
 
-// Load ANSWERS (required list)
-if (process.env.WORDS_FILE && fs.existsSync(process.env.WORDS_FILE)) {
-  const list = loadListFromFile(process.env.WORDS_FILE, 'answers');
-  if (list) ANSWERS = list;
+// 1) Try files if provided
+let answersFromFile: string[] | null = null;
+let guessesFromFile: string[] | null = null;
+
+const wordsPath = process.env.WORDS_FILE;
+if (wordsPath && fs.existsSync(wordsPath)) {
+  answersFromFile = loadListFromFile(wordsPath);
 }
 
-// Load optional GUESSES (if present, we enforce; else accept any 5-letter)
-if (process.env.GUESSES_FILE && fs.existsSync(process.env.GUESSES_FILE)) {
-  const list = loadListFromFile(process.env.GUESSES_FILE, 'guesses');
-  if (list) GUESSES = new Set(list);
+const guessesPath = process.env.GUESSES_FILE;
+if (guessesPath && fs.existsSync(guessesPath)) {
+  guessesFromFile = loadListFromFile(guessesPath);
+}
+
+// 2) Otherwise try the `wordle-words` package
+let answersFromPkg: string[] | null = null;
+let guessesFromPkg: string[] | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const ww = require('wordle-words') as { allSolutions?: string[]; allGuesses?: string[] };
+  if (ww.allSolutions) answersFromPkg = normalizeList(ww.allSolutions);
+  if (ww.allGuesses)   guessesFromPkg = normalizeList(ww.allGuesses);
+} catch { /* optional dep */ }
+
+// 3) Choose final lists (all lowercase by construction)
+if (answersFromFile?.length) {
+  ANSWERS = answersFromFile;
+} else if (answersFromPkg?.length) {
+  ANSWERS = answersFromPkg;
+}
+
+if (guessesFromFile?.length) {
+  GUESSES = new Set(guessesFromFile);
+} else if (guessesFromPkg?.length) {
+  GUESSES = new Set(guessesFromPkg);
+} else {
+  GUESSES = null; // accept any 5-letter if no guesses list available
 }
 
 /**
@@ -134,37 +163,76 @@ app.post('/api/guess', (req, res) => {
   if (!game) return res.status(404).json({ error: 'Game not found' });
   if (game.state !== 'playing') return res.status(409).json({ error: 'Game finished' });
 
-  const up = guess.toUpperCase();
+    const lo = guess.toLowerCase();
+    if (!/^[a-z]{5}$/.test(lo)) return res.status(400).json({ error: 'Invalid format' });
 
-  // Basic format validation
-  if (!/^[A-Z]{5}$/.test(up)) {
-    return res.status(400).json({ error: 'Invalid format' }); // not 5 letters A–Z
-  }
-  // Optional dictionary check
-  if (GUESSES && !GUESSES.has(up)) {
+    const enforceDict = !(process.env.CHEAT_ALLOW_ANY === '1' && game.mode === 'cheat');
+    if (enforceDict && GUESSES && !GUESSES.has(lo)) {
     return res.status(400).json({ error: 'Not in word list' });
-  }
+    }
+
 
   game.round += 1;
 
   let marks: ReturnType<typeof scoreGuess>;
+
   if (game.mode === 'normal') {
-    marks = scoreGuess(game.answer, up);
+    try {
+      marks = scoreGuess((game as NormalGame).answer, lo);
+    } catch (err) {
+      log.error({ err, gameId, lo }, 'Normal mode scoring failed');
+      return res.status(500).json({ error: 'Scoring failed' });
+    }
     if (marks.every((m) => m === 'hit')) game.state = 'won';
   } else {
-    // cheating mode
-    if (!game.finalized) {
-      const { next, marks: m } = nextCheatingCandidates(game.candidates, up);
-      game.candidates = next;
-      marks = m;
-      if (game.candidates.length === 1) game.finalized = game.candidates[0];
-    } else {
-      marks = scoreGuess(game.finalized, up);
-      if (marks.every((m) => m === 'hit')) game.state = 'won';
+    // ---- Cheating Host (defensive) -----------------------------------------
+    const cg = game as CheatingGame;
+
+    try {
+      if (!cg.finalized) {
+        if (!Array.isArray(cg.candidates)) {
+          log.error({ gameId, lo, cg }, 'Cheat mode: candidates not an array');
+          return res.status(500).json({ error: 'Cheat mode internal state invalid' });
+        }
+
+        const { next, marks: m } = nextCheatingCandidates(cg.candidates, lo);
+        marks = m;
+        cg.candidates = next;
+
+        log.debug({ gameId, guess: lo, nextCount: next.length }, 'Cheat mode narrowed candidates');
+
+        if (cg.candidates.length === 0) {
+          // No possible answers remain after this guess: return marks, keep playing/lost by rounds.
+          // Do NOT crash; surface a clear client error for UX.
+          log.warn({ gameId, lastGuess: lo }, 'Cheat mode: no candidates remain');
+          // You can choose to auto-lose here; we keep normal round/loss logic:
+          // (game.state updated by maxRounds check below)
+        } else if (cg.candidates.length === 1) {
+          cg.finalized = cg.candidates[0];
+          log.info({ gameId, finalized: cg.finalized }, 'Cheat mode finalized answer');
+        }
+      } else {
+        // Once finalized, score like normal
+        if (!cg.finalized) {
+          log.error({ gameId }, 'Cheat mode: finalized missing unexpectedly');
+          return res.status(500).json({ error: 'Cheat mode internal state invalid (finalized)' });
+        }
+        marks = scoreGuess(cg.finalized, lo);
+        if (marks.every((m) => m === 'hit')) game.state = 'won';
+      }
+    } catch (err) {
+      log.error({ err, gameId, lo, game }, 'Cheat mode scoring failed');
+      return res.status(500).json({ error: 'Cheating mode failed' });
     }
   }
 
   if (game.state !== 'won' && game.round >= game.maxRounds) game.state = 'lost';
+
+  // If we somehow got here without marks (shouldn’t happen), guard it.
+  if (!marks) {
+    log.error({ gameId, game }, 'Marks missing after guess processing');
+    return res.status(500).json({ error: 'Internal error (marks missing)' });
+  }
 
   res.json(guessRes.parse({ marks, round: game.round, state: game.state }));
 });

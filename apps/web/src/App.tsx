@@ -102,13 +102,23 @@ export default function App() {
         body: JSON.stringify({ gameId, guess })
       });
       if (!r.ok) {
-        const text = await r.text();
-        if (text.includes('Not in word list')) {
-          setErr('Not in word list');
-          setTimeout(() => setErr(null), 1500);
-        }
+        const text = (await r.text()).trim();
+        // Normalize message
+        const msg =
+          /not in word list/i.test(text) ? 'Not in word list' :
+          /invalid format/i.test(text) ? 'Enter a valid 5‑letter word' :
+          text || `Error ${r.status}`;
+
+        setErr(msg);
+        // trigger row shake for invalid word feedback
+        const rowEl = document.querySelectorAll('.row')[rows.length] as HTMLElement | null;
+        rowEl?.classList.add('shake');
+        setTimeout(() => rowEl?.classList.remove('shake'), 400);
+
+        setTimeout(() => setErr(null), 1500);
         return;
       }
+
       const data = await r.json() as { marks: Mark[]; round: number; state: State };
       setRows(rs => [...rs, guess.toUpperCase()]);
       setMarks(ms => [...ms, data.marks]);
