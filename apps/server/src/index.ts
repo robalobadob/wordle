@@ -40,9 +40,6 @@ const normalizeList = (arr: unknown): string[] | null =>
 let ANSWERS: string[] = normalizeList(DEFAULT_ANSWERS) ?? DEFAULT_ANSWERS.map(toLower5);
 let GUESSES: Set<string> | null = null;
 
-// Optional: allow any 5-letter in cheat mode even if GUESSES is set
-const CHEAT_ALLOW_ANY = process.env.CHEAT_ALLOW_ANY === '1';
-
 // One-arg file loader (returns lowercase list or null)
 function loadListFromFile(path: string): string[] | null {
   try {
