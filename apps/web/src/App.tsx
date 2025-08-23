@@ -8,6 +8,11 @@ const ROWS = 6, COLS = 5;
 
 type State = 'idle' | 'playing' | 'won' | 'lost' | 'error';
 
+const MODE_TITLES: Record<Mode, string> = {
+  normal: 'Classic Wordle',
+  cheat: 'Cheating Host'
+};
+
 export default function App() {
   const [mode, setMode] = useState<Mode>(() => (localStorage.getItem('mode') as Mode) || 'normal');
   const [cb, setCb] = useState(() => localStorage.getItem('cb') === '1'); // color-blind
@@ -60,6 +65,11 @@ export default function App() {
 
   useEffect(() => { if (API) newGame(mode); }, []); // initial
 
+  // keep document title in sync with mode
+  useEffect(() => {
+    document.title = MODE_TITLES[mode];
+  }, [mode]);
+
   // physical keyboard
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -106,54 +116,81 @@ export default function App() {
     if (guess.length < COLS && /^[A-Z]$/.test(k)) setGuess(g => g + k);
   }
 
+  const showBanner = state === 'won' || state === 'lost';
+  const bannerText = state === 'won' ? 'You won!' : state === 'lost' ? 'You lost' : '';
+
   return (
     <div className={`app ${cb ? 'cb' : ''}`}>
-      <div className="hbar">
-        <h1 style={{ marginRight: 'auto' }}>Wordle</h1>
-        <label>Mode:&nbsp;
-          <select
-            value={mode}
-            onChange={e => {
-              const m = e.target.value as Mode;
-              setMode(m); localStorage.setItem('mode', m);
-              newGame(m);
-            }}
-          >
-            <option value="normal">Normal</option>
-            <option value="cheat">Cheating Host</option>
-          </select>
-        </label>
-        <button onClick={() => newGame(mode)}>New Game</button>
-        <label title="Color-blind palette" style={{ display:'flex', alignItems:'center', gap:6 }}>
-          <input type="checkbox" checked={cb}
-            onChange={e => { setCb(e.target.checked); localStorage.setItem('cb', e.target.checked ? '1':'0'); }} />
-          CB
-        </label>
-      </div>
+      <div className="shell">
+        {/* Header */}
+        <header className="header">
+          <h1 className="title">{MODE_TITLES[mode]}</h1>
 
-      <p>Status: <b>{state}</b></p>
-      <div className="toast">{err ?? ''}</div>
+          <div className="controls" role="group" aria-label="Game controls">
+            <label className="control">
+              <span className="label">Mode</span>
+              <select
+                value={mode}
+                onChange={e => {
+                  const m = e.target.value as Mode;
+                  setMode(m); localStorage.setItem('mode', m);
+                  newGame(m);
+                }}
+              >
+                <option value="normal">Normal</option>
+                <option value="cheat">Cheating Host</option>
+              </select>
+            </label>
 
-      {/* Board */}
-      <div className="board" style={{ gridTemplateRows: `repeat(${ROWS}, 1fr)` }}>
-        {Array.from({ length: ROWS }).map((_, r) => {
-          const g = rows[r] ?? (r === rows.length ? guess.toUpperCase() : '');
-          const m = marks[r];
-          return (
-            <div className="row" key={r}>
-              {Array.from({ length: COLS }).map((__, c) => {
-                const letter = g[c] ?? '';
-                const status: Mark | '' = m?.[c] ?? '';
-                const cls = status ? `tile ${status}` : letter ? 'tile filled' : 'tile';
-                return <div key={c} className={cls}>{letter}</div>;
-              })}
+            <button className="btn" onClick={() => newGame(mode)}>New Game</button>
+
+            <label className="control switch" title="Color-blind palette">
+              <input
+                type="checkbox"
+                checked={cb}
+                onChange={e => { setCb(e.target.checked); localStorage.setItem('cb', e.target.checked ? '1':'0'); }}
+              />
+              <span>CB</span>
+            </label>
+          </div>
+        </header>
+
+        {/* Toast */}
+        <div className={`toast ${err ? 'show' : ''}`} role="status" aria-live="polite">{err ?? ''}</div>
+
+        {/* Board */}
+        <main className="main">
+          <div className="board" style={{ gridTemplateRows: `repeat(${ROWS}, 1fr)` }}>
+            {Array.from({ length: ROWS }).map((_, r) => {
+              const g = rows[r] ?? (r === rows.length ? guess.toUpperCase() : '');
+              const m = marks[r];
+              return (
+                <div className="row" key={r}>
+                  {Array.from({ length: COLS }).map((__, c) => {
+                    const letter = g[c] ?? '';
+                    const status: Mark | '' = m?.[c] ?? '';
+                    const cls = status ? `tile ${status}` : letter ? 'tile filled' : 'tile';
+                    return <div key={c} className={cls}>{letter}</div>;
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </main>
+
+        {/* Status banner (only on end states) */}
+        {showBanner && (
+          <div className={`banner ${state}`}>
+            <div className="banner-content">
+              <strong>{bannerText}</strong>
+              <button className="btn ghost" onClick={() => newGame(mode)}>Play again</button>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        )}
 
-      {/* On-screen keyboard */}
-      <Keyboard keyState={keyState} onKey={onKeyClick} />
+        {/* On-screen keyboard */}
+        <Keyboard keyState={keyState} onKey={onKeyClick} />
+      </div>
     </div>
   );
 }
