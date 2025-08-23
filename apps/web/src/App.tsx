@@ -59,8 +59,9 @@ export default function App() {
       setMarks([]);
       setGuess('');
       setState('playing');
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setErr(message);
       setState('error');
     }
   }
@@ -124,8 +125,9 @@ export default function App() {
       setMarks(ms => [...ms, data.marks]);
       setGuess('');
       setState(data.state);
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setErr(message);
     } finally {
       submittingRef.current = false;
     }
@@ -153,7 +155,7 @@ export default function App() {
               <span className="label">Mode</span>
               <select
                 value={mode}
-                onChange={e => {
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   const m = e.target.value as Mode;
                   setMode(m); localStorage.setItem('mode', m);
                   newGame(m);
@@ -170,7 +172,10 @@ export default function App() {
               <input
                 type="checkbox"
                 checked={cb}
-                onChange={e => { setCb(e.target.checked); localStorage.setItem('cb', e.target.checked ? '1':'0'); }}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setCb(e.target.checked);
+                  localStorage.setItem('cb', e.target.checked ? '1' : '0');
+                }}
               />
               <span>CB</span>
             </label>
