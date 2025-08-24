@@ -11,6 +11,8 @@ import (
 
 	"github.com/robalobadob/wordle/apps/go-server/internal/game"
 	"github.com/robalobadob/wordle/apps/go-server/internal/store"
+	"github.com/robalobadob/wordle/apps/go-server/internal/words"
+
 )
 
 type Server struct {
@@ -46,6 +48,14 @@ func New(st store.Store) *Server {
 	// JSON 404s so mistakes are obvious in dev
 	s.r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"not_found","path":"`+r.URL.Path+`"}`, http.StatusNotFound)
+	})
+
+	s.r.Get("/debug/words", func(w http.ResponseWriter, r *http.Request) {
+		a, g := words.Stats()
+		_ = json.NewEncoder(w).Encode(map[string]int{
+			"answers": a,
+			"allowed": g,
+		})
 	})
 
 	return s
