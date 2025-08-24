@@ -139,3 +139,8 @@ func IsAnswer(w string) bool {
 	_, ok := answersSet[strings.ToLower(w)]
 	return ok
 }
+
+// Stats returns the number of answers and allowed words currently loaded.
+func Stats() (answersCount int, allowedCount int) {
+	return len(answers), len(allowedSet)
+}
