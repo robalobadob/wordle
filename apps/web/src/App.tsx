@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Mark } from '@wordle/game-core';
+import type { Mark } from '@wordle/game-core'; // 'hit' | 'present' | 'miss'
 import './styles.css';
 
 type Mode = 'normal' | 'cheat';
 const API = import.meta.env.VITE_API_URL as string;
-const ROWS = 6,
-  COLS = 5;
+const ROWS = 6, COLS = 5;
 
 type State = 'idle' | 'playing' | 'won' | 'lost' | 'error';
 
@@ -46,17 +45,18 @@ export default function App() {
     return best; // e.g., { A:'present', E:'hit' }
   }, [rows, marks]);
 
-  // create or recreate a game
+  // create or recreate a game (Go server endpoints)
   async function newGame(m: Mode) {
     try {
       setErr(null);
-      const r = await fetch(`${API}/api/new`, {
+      const r = await fetch(`${API}/game/new`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // Go server currently ignores mode; sending for future parity
         body: JSON.stringify({ mode: m, maxRounds: ROWS }),
       });
-      if (!r.ok) throw new Error(`/api/new ${r.status}`);
-      const data = await r.json();
+      if (!r.ok) throw new Error(`/game/new ${r.status}`);
+      const data = (await r.json()) as { gameId: string };
       setGameId(data.gameId);
       setRows([]);
       setMarks([]);
@@ -71,7 +71,8 @@ export default function App() {
 
   useEffect(() => {
     if (API) newGame(mode);
-  }, []); // initial
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // initial only
 
   // keep document title in sync with mode
   useEffect(() => {
@@ -108,21 +109,22 @@ export default function App() {
     if (!gameId || guess.length !== COLS || submittingRef.current) return;
     submittingRef.current = true;
     try {
-      const r = await fetch(`${API}/api/guess`, {
+      const r = await fetch(`${API}/game/guess`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ gameId, guess }),
       });
       if (!r.ok) {
         const text = (await r.text()).trim();
-        // Normalize message
-        const msg = /not in word list/i.test(text)
-          ? 'Not in word list'
-          : /invalid format/i.test(text)
-            ? 'Enter a valid 5‑letter word'
-            : text || `Error ${r.status}`;
+
+        // Normalize some likely messages; Go returns plain JSON errors like {"error":"invalid_guess"}
+        const msg =
+          /not in word list/i.test(text) ? 'Not in word list' :
+          /invalid/i.test(text) ? 'Enter a valid 5‑letter word' :
+          text || `Error ${r.status}`;
 
         setErr(msg);
+
         // trigger row shake for invalid word feedback
         const rowEl =
           document.querySelectorAll<HTMLElement>('.row')[rows.length] ?? null;
@@ -135,8 +137,7 @@ export default function App() {
 
       const data = (await r.json()) as {
         marks: Mark[];
-        round: number;
-        state: State;
+        state: Exclude<State, 'idle' | 'error'>;
       };
       setRows((rs) => [...rs, guess.toUpperCase()]);
       setMarks((ms) => [...ms, data.marks]);
