@@ -52,9 +52,9 @@ func New(st store.Store, db *sql.DB) *Server {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
 
-	// Game endpoints
-	s.r.Post("/game/new", s.handleNewGame)
-	s.r.Post("/game/guess", s.handleGuess)
+	// Game endpoints (now require auth)
+	s.r.With(s.requireAuth()).Post("/game/new", s.handleNewGame)
+	s.r.With(s.requireAuth()).Post("/game/guess", s.handleGuess)
 
 	// Auth endpoints
 	s.mountAuthRoutes()
@@ -256,6 +256,52 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	s.clearAuthCookie(w)
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+// --- optional auth (does not 401) ---
+func (s *Server) withOptionalAuth() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if tok := bearerOrCookie(r); tok != "" {
+				claims := jwt.MapClaims{}
+				if t, err := jwt.ParseWithClaims(tok, claims, func(t *jwt.Token) (interface{}, error) {
+					return []byte(getEnv("JWT_SECRET", "dev_secret_change_me")), nil
+				}); err == nil && t.Valid {
+					if id, _ := claims["id"].(string); id != "" {
+						if u, err := s.findUserByID(id); err == nil {
+							ctx := context.WithValue(r.Context(), ctxUserKey{}, &authUser{ID: u.ID, Username: u.Username})
+							r = r.WithContext(ctx)
+						}
+					}
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+const anonCookieName = "wordle_anon"
+
+func (s *Server) ensureAnonID(w http.ResponseWriter, r *http.Request) string {
+	if c, err := r.Cookie(anonCookieName); err == nil && c.Value != "" {
+		return c.Value
+	}
+	id := genID()
+	http.SetCookie(w, &http.Cookie{
+		Name:     anonCookieName,
+		Value:    id,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   os.Getenv("NODE_ENV") == "production",
+		SameSite: func() http.SameSite {
+			if os.Getenv("NODE_ENV") == "production" {
+				return http.SameSiteNoneMode
+			}
+			return http.SameSiteLaxMode
+		}(),
+		Expires: time.Now().Add(180 * 24 * time.Hour),
+	})
+	return id
 }
 
 // ---- auth helpers (JWT, bcrypt, user store) ----
