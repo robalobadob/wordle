@@ -26,11 +26,11 @@
     "prettier": "^3.6.2",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.40.0",
-    "vitest": "^1.6.1"
+    "vitest": "^1.6.1",
+    "wordle-words": "^0.0.0"
   },
   "dependencies": {
     "tsup": "^8.5.0",
-    "wordle-words": "^0.0.0",
     "zod": "^4.0.17"
   }
 }
