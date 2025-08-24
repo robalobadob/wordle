@@ -123,7 +123,7 @@ func (s *Server) handleGuess(w http.ResponseWriter, r *http.Request) {
 	}
 	marks, state, err := g.ApplyGuess(req.Guess)
 	if err != nil {
-		http.Error(w, `{"error":"invalid_guess"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
 	if err := s.store.Save(r.Context(), g); err != nil {
