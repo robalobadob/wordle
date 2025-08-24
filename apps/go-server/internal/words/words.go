@@ -21,47 +21,66 @@ var embeddedAnswers string
 var embeddedAllowed string
 
 var (
-	initOnce     sync.Once
-	answers      []string
-	allowedSet   map[string]struct{} // answers ∪ guesses
-	answersSet   map[string]struct{} // answers only
-	initialErr   error
+	initOnce   sync.Once
+	answers    []string
+	allowedSet map[string]struct{} // answers ∪ guesses
+	answersSet map[string]struct{} // answers only
+	initialErr error
 )
 
-// Init loads wordlists once. If the env vars are set, it loads those files.
+// Init loads wordlists once. If env vars are set, it loads those files.
 // Otherwise it falls back to the embedded defaults.
 //
 // Env vars (absolute or relative paths):
 //   WORDS_ANSWERS_FILE=/path/to/answers.txt
 //   WORDS_ALLOWED_FILE=/path/to/allowed.txt
+//
+// Behavior:
+//   - both set: uses answers.txt for solutions, allowed.txt for guesses
+//   - only WORDS_ALLOWED_FILE set: uses that file for BOTH answers and guesses
+//   - neither set: uses embedded tiny defaults
 func Init() error {
 	initOnce.Do(func() {
 		var ansList, allowList []string
-		// load answers
-		if p := os.Getenv("WORDS_ANSWERS_FILE"); p != "" {
+
+		answersPath := os.Getenv("WORDS_ANSWERS_FILE")
+		allowedPath := os.Getenv("WORDS_ALLOWED_FILE")
+
+		switch {
+		// Case 1: both lists provided explicitly
+		case answersPath != "" && allowedPath != "":
 			var err error
-			ansList, err = readWordFile(p)
+			ansList, err = readWordFile(answersPath)
 			if err != nil { initialErr = err; return }
-		} else {
+			allowList, err = readWordFile(allowedPath)
+			if err != nil { initialErr = err; return }
+
+		// Case 2: single merged list provided
+		case answersPath == "" && allowedPath != "":
+			var err error
+			allowList, err = readWordFile(allowedPath)
+			if err != nil { initialErr = err; return }
+			// Use the same list for answers & allowed
+			ansList = allowList
+
+		// Case 3: fall back to embedded defaults
+		default:
 			ansList = normalizeLines(embeddedAnswers)
-		}
-		// load allowed (guesses). If not provided, use answers as allowed.
-		if p := os.Getenv("WORDS_ALLOWED_FILE"); p != "" {
-			var err error
-			allowList, err = readWordFile(p)
-			if err != nil { initialErr = err; return }
-		} else if embeddedAllowed != "" {
-			allowList = normalizeLines(embeddedAllowed)
-		} else {
-			allowList = nil
+			if embeddedAllowed != "" {
+				allowList = normalizeLines(embeddedAllowed)
+			} else {
+				allowList = ansList // ensure allowed includes answers at minimum
+			}
 		}
 
 		answers = ansList
 		answersSet = toSet(ansList)
-		allowedSet = toSet(append([]string{}, ansList...))
+
+		allowedSet = toSet(append([]string{}, ansList...)) // answers are always allowed
 		for _, w := range allowList {
 			allowedSet[w] = struct{}{}
 		}
+
 		if len(answers) == 0 {
 			initialErr = errors.New("words: answers list is empty")
 		}
