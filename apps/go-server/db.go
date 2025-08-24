@@ -42,16 +42,12 @@ func migrate(db *sql.DB) error {
 		return fmt.Errorf("create _migrations: %w", err)
 	}
 
-	// Collect all .sql files under ./sql (same CWD as the binary working dir)
+	// Collect and sort ./sql/*.sql
 	root := "sql"
 	var files []string
 	if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
+		if err != nil { return err }
+		if d.IsDir() { return nil }
 		if strings.HasSuffix(strings.ToLower(d.Name()), ".sql") {
 			files = append(files, path)
 		}
@@ -59,44 +55,61 @@ func migrate(db *sql.DB) error {
 	}); err != nil {
 		return fmt.Errorf("walk sql dir: %w", err)
 	}
-
-	if len(files) == 0 {
-		log.Warn().Msg("no .sql files found under ./sql; skipping migrations")
-		return nil
-	}
 	sort.Strings(files)
 
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
 	for _, f := range files {
-		var already int
-		err := tx.QueryRow(`SELECT 1 FROM _migrations WHERE name = ?`, f).Scan(&already)
+		// Skip if already applied
+		var done int
+		err := db.QueryRow(`SELECT 1 FROM _migrations WHERE name=?`, f).Scan(&done)
 		if err == nil {
 			log.Info().Str("migration", f).Msg("already applied")
 			continue
 		}
-		if err != sql.ErrNoRows && err != nil {
-			return fmt.Errorf("query migrations: %w", err)
+		if err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("query _migrations: %w", err)
 		}
 
 		sqlBytes, err := os.ReadFile(f)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", f, err)
 		}
+		sqlText := string(sqlBytes)
 
-		if _, err := tx.Exec(string(sqlBytes)); err != nil {
+		// Detect scripts that manage their own transaction / FK pragma toggles.
+		selfManaged := strings.Contains(strings.ToUpper(sqlText), "BEGIN TRANSACTION") ||
+			strings.Contains(strings.ToUpper(sqlText), "PRAGMA FOREIGN_KEYS=OFF") ||
+			strings.Contains(strings.ToUpper(sqlText), "PRAGMA FOREIGN_KEYS = OFF")
+
+		if selfManaged {
+			// Execute as-is, not inside an outer tx
+			if _, err := db.Exec(sqlText); err != nil {
+				return fmt.Errorf("apply %s: %w", f, err)
+			}
+			if _, err := db.Exec(`INSERT INTO _migrations(name) VALUES (?)`, f); err != nil {
+				return fmt.Errorf("record %s: %w", f, err)
+			}
+			log.Info().Str("migration", f).Msg("applied (self-managed)")
+			continue
+		}
+
+		// Normal migration: run inside its own transaction
+		tx, err := db.Begin()
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(sqlText); err != nil {
+			_ = tx.Rollback()
 			return fmt.Errorf("apply %s: %w", f, err)
 		}
 		if _, err := tx.Exec(`INSERT INTO _migrations(name) VALUES (?)`, f); err != nil {
+			_ = tx.Rollback()
 			return fmt.Errorf("record %s: %w", f, err)
 		}
-
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit %s: %w", f, err)
+		}
 		log.Info().Str("migration", f).Msg("applied")
 	}
-
-	return tx.Commit()
+	return nil
 }
+
