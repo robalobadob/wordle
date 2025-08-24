@@ -46,17 +46,16 @@ func New(st store.Store, db *sql.DB) *Server {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"service":"wordle-go","endpoints":["/health","POST /game/new","POST /game/guess","/auth/*"]}`))
 	})
-
 	s.r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
 
-	// Game endpoints (now require auth)
-	s.r.With(s.requireAuth()).Post("/game/new", s.handleNewGame)
-	s.r.With(s.requireAuth()).Post("/game/guess", s.handleGuess)
+	// Game endpoints — OPTIONAL AUTH (guests can play)
+	s.r.With(s.withOptionalAuth()).Post("/game/new", s.handleNewGame)
+	s.r.With(s.withOptionalAuth()).Post("/game/guess", s.handleGuess)
 
-	// Auth endpoints
+	// Auth + profile endpoints (gated)
 	s.mountAuthRoutes()
 
 	// JSON 404s so mistakes are obvious in dev
@@ -67,10 +66,7 @@ func New(st store.Store, db *sql.DB) *Server {
 	// Debug
 	s.r.Get("/debug/words", func(w http.ResponseWriter, r *http.Request) {
 		a, g := words.Stats()
-		_ = json.NewEncoder(w).Encode(map[string]int{
-			"answers": a,
-			"allowed": g,
-		})
+		_ = json.NewEncoder(w).Encode(map[string]int{"answers": a, "allowed": g})
 	})
 
 	return s
@@ -114,7 +110,6 @@ type newGameReq struct {
 	Mode   string `json:"mode"`   // "normal" | "cheat" (cheat ignored for now)
 	Answer string `json:"answer"` // optional fixed answer for testing
 }
-
 type newGameRes struct {
 	GameID string `json:"gameId"`
 }
@@ -129,6 +124,25 @@ func (s *Server) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"save_failed"}`, http.StatusInternalServerError)
 		return
 	}
+
+	// Persist owner row: user or anonymous
+	now := time.Now().UTC().Format(time.RFC3339)
+	if me, _ := r.Context().Value(ctxUserKey{}).(*authUser); me != nil {
+		// If your schema requires answer NOT NULL and you don't expose it, use "".
+		_, err := s.db.Exec(`INSERT INTO games (id, user_id, answer, started_at, status, guesses)
+		                     VALUES (?,?,?,?,?,0)`, g.ID, me.ID, "", now, "playing")
+		if err != nil {
+			log.Warn().Err(err).Str("gameId", g.ID).Msg("insert user game row")
+		}
+	} else {
+		anon := s.ensureAnonID(w, r)
+		_, err := s.db.Exec(`INSERT INTO games (id, anonymous_id, answer, started_at, status, guesses)
+		                     VALUES (?,?,?,?,?,0)`, g.ID, anon, "", now, "playing")
+		if err != nil {
+			log.Warn().Err(err).Str("gameId", g.ID).Msg("insert anon game row")
+		}
+	}
+
 	_ = json.NewEncoder(w).Encode(newGameRes{GameID: g.ID})
 }
 
@@ -136,7 +150,6 @@ type guessReq struct {
 	GameID string `json:"gameId"`
 	Guess  string `json:"guess"`
 }
-
 type guessRes struct {
 	Marks []game.Mark `json:"marks"`
 	State string      `json:"state"` // "playing" | "won" | "lost"
@@ -162,6 +175,36 @@ func (s *Server) handleGuess(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"save_failed"}`, http.StatusInternalServerError)
 		return
 	}
+
+	// Best-effort persistence: increment guesses; if finished, stamp status and bump stats for authed users
+	me, _ := r.Context().Value(ctxUserKey{}).(*authUser)
+	ownerClause := `anonymous_id=?`
+	ownerArg := any(s.ensureAnonID(w, r))
+	if me != nil {
+		ownerClause = `user_id=?`
+		ownerArg = any(me.ID)
+	}
+
+	tx, _ := s.db.Begin()
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec(`UPDATE games SET guesses = guesses + 1 WHERE id=? AND `+ownerClause, g.ID, ownerArg); err != nil {
+		log.Warn().Err(err).Msg("update guesses")
+	}
+
+	if state == "won" || state == "lost" {
+		if _, err := tx.Exec(`UPDATE games SET status=?, finished_at=? WHERE id=? AND `+ownerClause,
+			state, time.Now().UTC().Format(time.RFC3339), g.ID, ownerArg); err != nil {
+			log.Warn().Err(err).Msg("finish game")
+		}
+		if me != nil {
+			if err := s.bumpStats(tx, me.ID, state == "won"); err != nil {
+				log.Warn().Err(err).Str("user", me.ID).Msg("bump stats")
+			}
+		}
+	}
+	_ = tx.Commit()
+
 	_ = json.NewEncoder(w).Encode(guessRes{Marks: marks, State: state})
 }
 
@@ -180,7 +223,7 @@ func (s *Server) mountAuthRoutes() {
 	s.r.Post("/auth/login", s.handleLogin)
 	s.r.Post("/auth/logout", s.handleLogout)
 
-	// protected
+	// Profiles & stats — gated
 	s.r.With(s.requireAuth()).Get("/auth/me", func(w http.ResponseWriter, r *http.Request) {
 		me, _ := r.Context().Value(ctxUserKey{}).(*authUser)
 		if me == nil {
@@ -207,6 +250,40 @@ func (s *Server) mountAuthRoutes() {
 			"streak":      u.Streak,
 		})
 	})
+
+	// Recent games — gated
+	s.r.With(s.requireAuth()).Get("/games/mine", func(w http.ResponseWriter, r *http.Request) {
+		me, _ := r.Context().Value(ctxUserKey{}).(*authUser)
+		if me == nil {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		rows, err := s.db.Query(`SELECT id, status, guesses, started_at, COALESCE(finished_at,'')
+		                         FROM games WHERE user_id=? ORDER BY started_at DESC LIMIT 50`, me.ID)
+		if err != nil {
+			http.Error(w, `{"error":"db_error"}`, http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+		type gameRow struct {
+			ID         string `json:"id"`
+			Status     string `json:"status"`
+			Guesses    int    `json:"guesses"`
+			StartedAt  string `json:"startedAt"`
+			FinishedAt string `json:"finishedAt,omitempty"`
+		}
+		out := []gameRow{}
+		for rows.Next() {
+			var gr gameRow
+			if err := rows.Scan(&gr.ID, &gr.Status, &gr.Guesses, &gr.StartedAt, &gr.FinishedAt); err == nil {
+				if gr.FinishedAt == "" {
+					gr.FinishedAt = ""
+				}
+				out = append(out, gr)
+			}
+		}
+		_ = json.NewEncoder(w).Encode(out)
+	})
 }
 
 func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
@@ -230,6 +307,10 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setAuthCookie(w, tok, exp)
+
+	// Claim guest history to this new account
+	s.claimAnonGames(s.ensureAnonID(w, r), u.ID)
+
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": u.ID, "username": u.Username, "createdAt": u.CreatedAt})
 }
 
@@ -250,6 +331,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setAuthCookie(w, tok, exp)
+
+	// Claim guest history to this account
+	s.claimAnonGames(s.ensureAnonID(w, r), u.ID)
+
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": u.ID, "username": u.Username})
 }
 
@@ -304,6 +389,15 @@ func (s *Server) ensureAnonID(w http.ResponseWriter, r *http.Request) string {
 	return id
 }
 
+func (s *Server) claimAnonGames(anonID, userID string) {
+	if anonID == "" || userID == "" {
+		return
+	}
+	if _, err := s.db.Exec(`UPDATE games SET user_id=?, anonymous_id=NULL WHERE anonymous_id=?`, userID, anonID); err != nil {
+		log.Warn().Err(err).Msg("claim anon games")
+	}
+}
+
 // ---- auth helpers (JWT, bcrypt, user store) ----
 
 type userRow struct {
@@ -321,7 +415,6 @@ func (s *Server) createUser(username, pw string) (*userRow, error) {
 	if err := validateSignup(username, pw); err != nil {
 		return nil, err
 	}
-	// check exists
 	var exists int
 	_ = s.db.QueryRow(`SELECT 1 FROM users WHERE lower(username)=lower(?)`, username).Scan(&exists)
 	if exists == 1 {
@@ -398,6 +491,24 @@ func genID() string {
 		return s[:22]
 	}
 	return s
+}
+
+// bump stats inside a tx
+func (s *Server) bumpStats(tx *sql.Tx, userID string, won bool) error {
+	var gp, wins, streak int
+	row := tx.QueryRow(`SELECT games_played, wins, streak FROM users WHERE id=?`, userID)
+	if err := row.Scan(&gp, &wins, &streak); err != nil {
+		return err
+	}
+	gp++
+	if won {
+		wins++
+		streak++
+	} else {
+		streak = 0
+	}
+	_, err := tx.Exec(`UPDATE users SET games_played=?, wins=?, streak=? WHERE id=?`, gp, wins, streak, userID)
+	return err
 }
 
 // --- JWT & cookies ---
@@ -485,7 +596,7 @@ func (s *Server) requireAuth() func(http.Handler) http.Handler {
 			}
 			claims := jwt.MapClaims{}
 			token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
-				return []byte(getEnv("JWT_SECRET", "dev_secret_change_me")), nil
+			 return []byte(getEnv("JWT_SECRET", "dev_secret_change_me")), nil
 			})
 			if err != nil || !token.Valid {
 				http.Error(w, `{"error":"Invalid token"}`, http.StatusUnauthorized)
