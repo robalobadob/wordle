@@ -21,9 +21,19 @@ type Server struct {
 func New(st store.Store) *Server {
 	s := &Server{r: chi.NewRouter(), store: st}
 
-	s.r.Use(chimw.RequestID, chimw.RealIP, chimw.Recoverer)
+	// --- middlewares ---
+	s.r.Use(chimw.RequestID)
+	s.r.Use(chimw.RealIP)
+	s.r.Use(chimw.Recoverer)
 	s.r.Use(chimw.Timeout(10 * time.Second))
-	s.r.Use(jsonMiddleware)
+	s.r.Use(jsonContentType)
+	s.r.Use(corsAllowAll) // dev‑friendly CORS; tighten later for prod
+
+	// --- routes ---
+	s.r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"service":"wordle-go","endpoints":["/health","POST /game/new","POST /game/guess"]}`))
+	})
 
 	s.r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -33,33 +43,40 @@ func New(st store.Store) *Server {
 	s.r.Post("/game/new", s.handleNewGame)
 	s.r.Post("/game/guess", s.handleGuess)
 
+	// JSON 404s so mistakes are obvious in dev
+	s.r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":"not_found","path":"`+r.URL.Path+`"}`, http.StatusNotFound)
+	})
+
 	return s
 }
 
 func (s *Server) Start(addr string) error { return http.ListenAndServe(addr, s.r) }
 
-func jsonMiddleware(next http.Handler) http.Handler {
+// --- middleware ---
+
+func jsonContentType(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		next.ServeHTTP(w, r)
 	})
 }
 
-s.r.Use(func(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Access-Control-Allow-Origin", "*")
-        w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-        w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        if r.Method == http.MethodOptions {
-            w.WriteHeader(http.StatusNoContent)
-            return
-        }
-        next.ServeHTTP(w, r)
-    })
-})
+func corsAllowAll(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == http.MethodOptions {
+			// Preflight OK
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
-
-// --- Handlers ---
+// --- handlers ---
 
 type newGameReq struct {
 	Mode   string `json:"mode"`   // "normal" | "cheat" (cheat ignored for now)
@@ -74,7 +91,7 @@ func (s *Server) handleNewGame(w http.ResponseWriter, r *http.Request) {
 	var req newGameReq
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
-	g := game.New(req.Answer) // random if empty
+	g := game.New(req.Answer) // random default inside game.New
 	if err := s.store.Save(r.Context(), g); err != nil {
 		log.Error().Err(err).Msg("save game")
 		http.Error(w, `{"error":"save_failed"}`, http.StatusInternalServerError)
@@ -104,7 +121,7 @@ func (s *Server) handleGuess(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"not_found"}`, http.StatusNotFound)
 		return
 	}
-	result, state, err := g.ApplyGuess(req.Guess)
+	marks, state, err := g.ApplyGuess(req.Guess)
 	if err != nil {
 		http.Error(w, `{"error":"invalid_guess"}`, http.StatusBadRequest)
 		return
@@ -113,5 +130,5 @@ func (s *Server) handleGuess(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"save_failed"}`, http.StatusInternalServerError)
 		return
 	}
-	_ = json.NewEncoder(w).Encode(guessRes{Marks: result, State: state})
+	_ = json.NewEncoder(w).Encode(guessRes{Marks: marks, State: state})
 }
