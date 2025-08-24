@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"strings"
+
+	"github.com/robalobadob/wordle/apps/go-server/internal/words"
 )
 
 const (
@@ -15,8 +17,7 @@ const (
 func New(withAnswer string) *Game {
 	ans := withAnswer
 	if ans == "" {
-		// TODO: swap with shared word list picker; for now a fixed answer helps dev.
-		ans = "crane"
+		ans = words.RandomAnswer()
 	}
 	return &Game{
 		ID:      randomID(),
@@ -34,6 +35,9 @@ func (g *Game) ApplyGuess(guess string) ([]Mark, string, error) {
 	guess = strings.ToLower(strings.TrimSpace(guess))
 	if len(guess) != g.Cols || !isAlpha(guess) {
 		return nil, g.state(), errors.New("invalid guess")
+	}
+	if !words.IsAllowed(guess) {
+		return nil, g.state(), errors.New("not in word list")
 	}
 	marks := scoreGuess(g.Answer, guess)
 	g.Guesses = append(g.Guesses, guess)
