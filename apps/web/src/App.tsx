@@ -5,6 +5,7 @@ import './styles.css';
 import { useAuth } from './auth/AuthProvider';
 import { useHashRoute } from "./lib/useHashRoute";
 import SaveProgressBanner from './components/SaveProgressBanner';
+import Header from "./components/Header";
 import AuthPage from './pages/AuthPage';
 import ProfilePage from './pages/ProfilePage';
 
@@ -21,16 +22,11 @@ const MODE_TITLES: Record<Mode, string> = {
 export default function App() {
   const hash = useHashRoute();
   const page = useMemo(() => (hash || '#/').split('?')[0], [hash]);
-
-  // 🔑 Force a fresh mount when the hash changes
   if (page === '#/auth') return <AuthPage key={hash} />;
   if (page === '#/profile') return <ProfilePage key={hash} />;
 
-  // ---- Game screen stays exactly as you had it ----
   return <GameScreen key="game" />;
 }
-
-/* ------------ your existing game screen moved below ------------- */
 
 function GameScreen() {
   const { me, logout } = useAuth();
@@ -146,6 +142,8 @@ function GameScreen() {
   const bannerText = state === 'won' ? 'You won!' : state === 'lost' ? 'You lost' : '';
 
   return (
+    <>
+    <Header />
     <div className={`app ${cb ? 'cb' : ''}`}>
       <div className="shell">
         {/* Header */}
@@ -249,6 +247,7 @@ function GameScreen() {
         <Keyboard keyState={keyState} onKey={onKeyClick} />
       </div>
     </div>
+    </>
   );
 }
 
