@@ -24,16 +24,44 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="p-4 max-w-sm mx-auto">
-      <h1 className="text-xl font-bold mb-3">{mode === "signup" ? "Create account" : "Sign in"}</h1>
-      {err && <div className="text-red-600 text-sm mb-2">{err}</div>}
-      <form onSubmit={onSubmit} className="flex flex-col gap-2">
-        <input className="border p-2 rounded" placeholder="username" value={username} onChange={e=>setU(e.target.value)} />
-        <input className="border p-2 rounded" placeholder="password" type="password" value={password} onChange={e=>setP(e.target.value)} />
-        <button disabled={loading} className="bg-black text-white rounded p-2">{loading ? "…" : (mode==="signup"?"Sign up":"Sign in")}</button>
+    <div className="auth">
+      <h1 className="auth-title">
+        {mode === "signup" ? "Create account" : "Sign in"}
+      </h1>
+
+      {err && <div className="alert error">{err}</div>}
+
+      <form onSubmit={onSubmit} className="form-vert">
+        <input
+          className="input"
+          placeholder="username"
+          value={username}
+          onChange={(e) => setU(e.target.value)}
+          autoComplete="username"
+        />
+        <input
+          className="input"
+          placeholder="password"
+          type="password"
+          value={password}
+          onChange={(e) => setP(e.target.value)}
+          autoComplete={mode === "signup" ? "new-password" : "current-password"}
+        />
+        <button disabled={loading} className="btn btn-primary">
+          {loading ? "…" : mode === "signup" ? "Sign up" : "Sign in"}
+        </button>
       </form>
-      <div className="mt-3 text-sm">
-        {mode==="signup" ? <a href="#/auth">Already have an account? Sign in</a> : <a href="#/auth?mode=signup">Create an account</a>}
+
+      <div className="auth-foot">
+        {mode === "signup" ? (
+          <a href="#/auth" className="link">
+            Already have an account? Sign in
+          </a>
+        ) : (
+          <a href="#/auth?mode=signup" className="link">
+            Create an account
+          </a>
+        )}
       </div>
     </div>
   );
