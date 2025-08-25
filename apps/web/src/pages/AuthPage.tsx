@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
+import Header from "../components/Header";
 
 export default function AuthPage() {
   const { signup, login } = useAuth();
@@ -24,7 +25,10 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="auth">
+    <>
+    <Header />
+    <main className="page">
+      <div className="auth">
       <h1 className="auth-title">
         {mode === "signup" ? "Create account" : "Sign in"}
       </h1>
@@ -64,5 +68,7 @@ export default function AuthPage() {
         )}
       </div>
     </div>
+    </main>
+    </>
   );
 }
