@@ -1,7 +1,9 @@
+// App.tsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Mark } from '@wordle/game-core';
 import './styles.css';
 import { useAuth } from './auth/AuthProvider';
+import { useHashRoute } from "./lib/useHashRoute";
 import SaveProgressBanner from './components/SaveProgressBanner';
 import AuthPage from './pages/AuthPage';
 import ProfilePage from './pages/ProfilePage';
@@ -9,7 +11,6 @@ import ProfilePage from './pages/ProfilePage';
 type Mode = 'normal' | 'cheat';
 const API = import.meta.env.VITE_API_URL as string;
 const ROWS = 6, COLS = 5;
-
 type State = 'idle' | 'playing' | 'won' | 'lost' | 'error';
 
 const MODE_TITLES: Record<Mode, string> = {
@@ -18,24 +19,23 @@ const MODE_TITLES: Record<Mode, string> = {
 };
 
 export default function App() {
-  const [hash, setHash] = useState(location.hash || '#/');
-  useEffect(() => {
-    const onHash = () => setHash(location.hash || '#/');
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, []);
-  const page = useMemo(() => hash.split('?')[0], [hash]);
+  const hash = useHashRoute();
+  const page = useMemo(() => (hash || '#/').split('?')[0], [hash]);
 
-  // Route switch
-  if (page === '#/auth') return <AuthPage />;
-  if (page === '#/profile') return <ProfilePage />;
+  // 🔑 Force a fresh mount when the hash changes
+  if (page === '#/auth') return <AuthPage key={hash} />;
+  if (page === '#/profile') return <ProfilePage key={hash} />;
 
-  // ---- your existing game screen below (unchanged except cookies+auth UI) ----
+  // ---- Game screen stays exactly as you had it ----
+  return <GameScreen key="game" />;
+}
+
+/* ------------ your existing game screen moved below ------------- */
+
+function GameScreen() {
   const { me, logout } = useAuth();
 
-  const [mode, setMode] = useState<Mode>(
-    () => (localStorage.getItem('mode') as Mode) || 'normal',
-  );
+  const [mode, setMode] = useState<Mode>(() => (localStorage.getItem('mode') as Mode) || 'normal');
   const [cb, setCb] = useState(() => localStorage.getItem('cb') === '1');
   const [gameId, setGameId] = useState<string | null>(null);
   const [state, setState] = useState<State>('idle');
@@ -44,7 +44,6 @@ export default function App() {
   const [rows, setRows] = useState<string[]>([]);
   const [marks, setMarks] = useState<Mark[][]>([]);
   const [guess, setGuess] = useState('');
-
   const submittingRef = useRef(false);
 
   const keyState = useMemo(() => {
@@ -67,7 +66,7 @@ export default function App() {
       const r = await fetch(`${API}/game/new`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // carry cookies (auth/anon)
+        credentials: 'include',
         body: JSON.stringify({ mode: m, maxRounds: ROWS }),
       });
       if (!r.ok) throw new Error(`/game/new ${r.status}`);
@@ -86,9 +85,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    document.title = MODE_TITLES[mode];
-  }, [mode]);
+  useEffect(() => { document.title = MODE_TITLES[mode]; }, [mode]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
