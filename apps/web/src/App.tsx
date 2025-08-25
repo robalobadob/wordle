@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Mark } from '@wordle/game-core'; // 'hit' | 'present' | 'miss'
+import type { Mark } from '@wordle/game-core';
 import './styles.css';
+import { useAuth } from './auth/AuthProvider';
+import SaveProgressBanner from './components/SaveProgressBanner';
+import AuthPage from './pages/AuthPage';
+import ProfilePage from './pages/ProfilePage';
 
 type Mode = 'normal' | 'cheat';
 const API = import.meta.env.VITE_API_URL as string;
@@ -14,23 +18,35 @@ const MODE_TITLES: Record<Mode, string> = {
 };
 
 export default function App() {
+  const [hash, setHash] = useState(location.hash || '#/');
+  useEffect(() => {
+    const onHash = () => setHash(location.hash || '#/');
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const page = useMemo(() => hash.split('?')[0], [hash]);
+
+  // Route switch
+  if (page === '#/auth') return <AuthPage />;
+  if (page === '#/profile') return <ProfilePage />;
+
+  // ---- your existing game screen below (unchanged except cookies+auth UI) ----
+  const { me, logout } = useAuth();
+
   const [mode, setMode] = useState<Mode>(
     () => (localStorage.getItem('mode') as Mode) || 'normal',
   );
-  const [cb, setCb] = useState(() => localStorage.getItem('cb') === '1'); // color-blind
+  const [cb, setCb] = useState(() => localStorage.getItem('cb') === '1');
   const [gameId, setGameId] = useState<string | null>(null);
   const [state, setState] = useState<State>('idle');
   const [err, setErr] = useState<string | null>(null);
 
-  // guesses + marks from server
   const [rows, setRows] = useState<string[]>([]);
   const [marks, setMarks] = useState<Mark[][]>([]);
-  // current input
   const [guess, setGuess] = useState('');
 
   const submittingRef = useRef(false);
 
-  // derived keyboard coloring
   const keyState = useMemo(() => {
     const ord: Record<Mark, number> = { miss: 0, present: 1, hit: 2 };
     const best: Record<string, Mark> = {};
@@ -42,29 +58,25 @@ export default function App() {
         if (!cur || ord[m] > ord[cur]) best[letter] = m;
       });
     });
-    return best; // e.g., { A:'present', E:'hit' }
+    return best;
   }, [rows, marks]);
 
-  // create or recreate a game (Go server endpoints)
   async function newGame(m: Mode) {
     try {
       setErr(null);
       const r = await fetch(`${API}/game/new`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Go server currently ignores mode; sending for future parity
+        credentials: 'include', // carry cookies (auth/anon)
         body: JSON.stringify({ mode: m, maxRounds: ROWS }),
       });
       if (!r.ok) throw new Error(`/game/new ${r.status}`);
       const data = (await r.json()) as { gameId: string };
       setGameId(data.gameId);
-      setRows([]);
-      setMarks([]);
-      setGuess('');
+      setRows([]); setMarks([]); setGuess('');
       setState('playing');
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      setErr(message);
+    } catch (e: any) {
+      setErr(e?.message ?? String(e));
       setState('error');
     }
   }
@@ -72,34 +84,21 @@ export default function App() {
   useEffect(() => {
     if (API) newGame(mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // initial only
+  }, []);
 
-  // keep document title in sync with mode
   useEffect(() => {
     document.title = MODE_TITLES[mode];
   }, [mode]);
 
-  // physical keyboard
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (state !== 'playing') return;
-
-      // prevent default submit/click behavior
       if (e.key === 'Enter' || e.key === 'Backspace') e.preventDefault();
-
-      // ignore auto-repeat (holding a key)
       if (e.repeat) return;
-
-      if (e.key === 'Enter') {
-        submit();
-        return;
-      }
-      if (e.key === 'Backspace') {
-        setGuess((g) => g.slice(0, -1));
-        return;
-      }
+      if (e.key === 'Enter') return void submit();
+      if (e.key === 'Backspace') return setGuess(g => g.slice(0, -1));
       const k = e.key.toUpperCase();
-      if (/^[A-Z]$/.test(k) && guess.length < COLS) setGuess((g) => g + k);
+      if (/^[A-Z]$/.test(k) && guess.length < COLS) setGuess(g => g + k);
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -112,40 +111,28 @@ export default function App() {
       const r = await fetch(`${API}/game/guess`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ gameId, guess }),
       });
       if (!r.ok) {
         const text = (await r.text()).trim();
-
-        // Normalize some likely messages; Go returns plain JSON errors like {"error":"invalid_guess"}
         const msg =
           /not in word list/i.test(text) ? 'Not in word list' :
           /invalid/i.test(text) ? 'Enter a valid 5‑letter word' :
           text || `Error ${r.status}`;
-
         setErr(msg);
-
-        // trigger row shake for invalid word feedback
-        const rowEl =
-          document.querySelectorAll<HTMLElement>('.row')[rows.length] ?? null;
-        rowEl?.classList.add('shake');
-        setTimeout(() => rowEl?.classList.remove('shake'), 400);
-
+        const rowEl = document.querySelectorAll<HTMLElement>('.row')[rows.length] ?? null;
+        rowEl?.classList.add('shake'); setTimeout(() => rowEl?.classList.remove('shake'), 400);
         setTimeout(() => setErr(null), 1500);
         return;
       }
-
-      const data = (await r.json()) as {
-        marks: Mark[];
-        state: Exclude<State, 'idle' | 'error'>;
-      };
-      setRows((rs) => [...rs, guess.toUpperCase()]);
-      setMarks((ms) => [...ms, data.marks]);
+      const data = (await r.json()) as { marks: Mark[]; state: Exclude<State, 'idle' | 'error'>; };
+      setRows(rs => [...rs, guess.toUpperCase()]);
+      setMarks(ms => [...ms, data.marks]);
       setGuess('');
       setState(data.state);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      setErr(message);
+    } catch (e: any) {
+      setErr(e?.message ?? String(e));
     } finally {
       submittingRef.current = false;
     }
@@ -154,13 +141,12 @@ export default function App() {
   function onKeyClick(k: string) {
     if (state !== 'playing') return;
     if (k === 'ENTER') return void submit();
-    if (k === 'DEL') return setGuess((g) => g.slice(0, -1));
-    if (guess.length < COLS && /^[A-Z]$/.test(k)) setGuess((g) => g + k);
+    if (k === 'DEL') return setGuess(g => g.slice(0, -1));
+    if (guess.length < COLS && /^[A-Z]$/.test(k)) setGuess(g => g + k);
   }
 
   const showBanner = state === 'won' || state === 'lost';
-  const bannerText =
-    state === 'won' ? 'You won!' : state === 'lost' ? 'You lost' : '';
+  const bannerText = state === 'won' ? 'You won!' : state === 'lost' ? 'You lost' : '';
 
   return (
     <div className={`app ${cb ? 'cb' : ''}`}>
@@ -169,12 +155,29 @@ export default function App() {
         <header className="header">
           <h1 className="title">{MODE_TITLES[mode]}</h1>
 
+          {/* tiny auth UI */}
+          <div className="auth-mini">
+            {me ? (
+              <span className="auth-in">
+                <span className="muted">Signed in as </span>
+                <strong>@{me.username}</strong>{' '}
+                <a href="#/profile" className="link">Profile</a>{' '}
+                <button className="link" onClick={logout}>Logout</button>
+              </span>
+            ) : (
+              <span className="auth-out">
+                <a className="link" href="#/auth">Sign in</a>{' '}
+                <a className="link" href="#/auth?mode=signup">Sign up</a>
+              </span>
+            )}
+          </div>
+
           <div className="controls" role="group" aria-label="Game controls">
             <label className="control">
               <span className="label">Mode</span>
               <select
                 value={mode}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                onChange={(e) => {
                   const m = e.target.value as Mode;
                   setMode(m);
                   localStorage.setItem('mode', m);
@@ -194,7 +197,7 @@ export default function App() {
               <input
                 type="checkbox"
                 checked={cb}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                onChange={(e) => {
                   setCb(e.target.checked);
                   localStorage.setItem('cb', e.target.checked ? '1' : '0');
                 }}
@@ -204,40 +207,27 @@ export default function App() {
           </div>
         </header>
 
+        {/* Guest CTA (top) */}
+        {!me && state === 'playing' && <SaveProgressBanner />}
+
         {/* Toast */}
-        <div
-          className={`toast ${err ? 'show' : ''}`}
-          role="status"
-          aria-live="polite"
-        >
+        <div className={`toast ${err ? 'show' : ''}`} role="status" aria-live="polite">
           {err ?? ''}
         </div>
 
         {/* Board */}
         <main className="main">
-          <div
-            className="board"
-            style={{ gridTemplateRows: `repeat(${ROWS}, 1fr)` }}
-          >
+          <div className="board" style={{ gridTemplateRows: `repeat(${ROWS}, 1fr)` }}>
             {Array.from({ length: ROWS }).map((_, r) => {
-              const g =
-                rows[r] ?? (r === rows.length ? guess.toUpperCase() : '');
+              const g = rows[r] ?? (r === rows.length ? guess.toUpperCase() : '');
               const m = marks[r];
               return (
                 <div className="row" key={r}>
                   {Array.from({ length: COLS }).map((__, c) => {
                     const letter = g[c] ?? '';
                     const status: Mark | '' = m?.[c] ?? '';
-                    const cls = status
-                      ? `tile ${status}`
-                      : letter
-                        ? 'tile filled'
-                        : 'tile';
-                    return (
-                      <div key={c} className={cls}>
-                        {letter}
-                      </div>
-                    );
+                    const cls = status ? `tile ${status}` : letter ? 'tile filled' : 'tile';
+                    return <div key={c} className={cls}>{letter}</div>;
                   })}
                 </div>
               );
@@ -245,7 +235,7 @@ export default function App() {
           </div>
         </main>
 
-        {/* Status banner (only on end states) */}
+        {/* Status banner */}
         {showBanner && (
           <div className={`banner ${state}`}>
             <div className="banner-content">
@@ -254,6 +244,7 @@ export default function App() {
                 Play again
               </button>
             </div>
+            {!me && <div className="mt-2"><SaveProgressBanner /></div>}
           </div>
         )}
 
@@ -281,10 +272,7 @@ function Keyboard({
       className="kb"
       role="group"
       aria-label="Keyboard"
-      onKeyDownCapture={(e) => {
-        // If a keyboard button is focused, prevent its Enter from also hitting window
-        if (e.key === 'Enter') e.stopPropagation();
-      }}
+      onKeyDownCapture={(e) => { if (e.key === 'Enter') e.stopPropagation(); }}
     >
       {rows.map((r, i) => (
         <div className="krow" key={i}>
