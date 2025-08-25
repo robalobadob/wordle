@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "../components/Header";
 
-type PlayState = "idle" | "playing" | "won" | "locked";
+type PlayState = "idle" | "playing" | "won" | "lost" | "locked";
 type MarkLabel = "miss" | "present" | "hit";
 
 type GuessResponse = {
@@ -14,6 +14,7 @@ type LeaderboardRow = { userId: string; guesses: number; elapsedMs: number };
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:5175";
 const ROWS = 6, COLS = 5;
+const daily = (p: string) => `${API}/daily${p}`; // no /api prefix
 
 export default function DailyPage() {
   const [gameId, setGameId] = useState<string | null>(null);
@@ -27,15 +28,14 @@ export default function DailyPage() {
   const submittingRef = useRef(false);
   const startedRef = useRef<number | null>(null);
 
-  // start today's game
+  // Start today's game
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API}/api/daily/new`, {
+        const res = await fetch(daily("/new"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          // "X-Debug-User": "demo" // optional for local testing
         });
         if (!res.ok) throw new Error(await res.text());
         const j: { gameId: string; date: string; played: boolean } = await res.json();
@@ -49,7 +49,7 @@ export default function DailyPage() {
     })();
   }, []);
 
-  // keyboard like main game
+  // Keyboard: mirror main game behavior
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (state !== "playing") return;
@@ -68,15 +68,30 @@ export default function DailyPage() {
     return nums.map(n => (n === 2 ? "hit" : n === 1 ? "present" : "miss"));
   }
 
+  // Build per-letter best status for keyboard (miss < present < hit)
+  const keyState = useMemo(() => {
+    const rank: Record<MarkLabel, number> = { miss: 0, present: 1, hit: 2 };
+    const best: Record<string, MarkLabel> = {};
+    marks.forEach((ms, rowIdx) => {
+      ms.forEach((m, i) => {
+        const letter = rows[rowIdx]?.[i]?.toUpperCase();
+        if (!letter) return;
+        const cur = best[letter];
+        if (!cur || rank[m] > rank[cur]) best[letter] = m;
+      });
+    });
+    return best;
+  }, [rows, marks]);
+
   async function submit() {
     if (!gameId || guess.length !== COLS || submittingRef.current) return;
     submittingRef.current = true;
     try {
-      const res = await fetch(`${API}/api/daily/guess`, {
+      const res = await fetch(daily("/guess"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ gameId, word: guess.toLowerCase() })
+        body: JSON.stringify({ gameId: gameId, word: guess.toLowerCase() })
       });
       if (!res.ok) {
         const text = (await res.text()).trim();
@@ -94,7 +109,14 @@ export default function DailyPage() {
       setRows(rs => [...rs, guess.toUpperCase()]);
       setMarks(ms => [...ms, mapMarks(j.marks)]);
       setGuess("");
-      if (j.state === "won") setState("won");
+
+      if (j.state === "won") {
+        setState("won");
+      } else {
+        // Detect loss when we've used all rows and server is still in_progress
+        const nextCount = rows.length + 1;
+        if (nextCount >= ROWS) setState("lost");
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Guess failed");
     } finally {
@@ -102,23 +124,32 @@ export default function DailyPage() {
     }
   }
 
-  const showBanner = state === "won";
+  const showBanner = state === "won" || state === "lost";
+  const bannerText = state === "won" ? "You won!" : state === "lost" ? "You lost" : "";
+
   return (
     <>
       <Header />
       <div className="app">
         <div className="shell">
-          {/* title */}
+          {/* Title */}
           <header className="header">
             <h1 className="title">Daily Challenge</h1>
           </header>
 
-          {/* toast */}
+          {/* Notice when already played */}
+          {state === "locked" && (
+            <div className="toast show" role="status" aria-live="polite">
+              You already played today. Check the leaderboard below.
+            </div>
+          )}
+
+          {/* Toast (errors) */}
           <div className={`toast ${err ? "show" : ""}`} role="status" aria-live="polite">
             {err ?? ""}
           </div>
 
-          {/* board identical to main game */}
+          {/* Board (identical structure/classes to main game) */}
           <main className="main">
             <div className="board" style={{ gridTemplateRows: `repeat(${ROWS}, 1fr)` }}>
               {Array.from({ length: ROWS }).map((_, r) => {
@@ -138,26 +169,29 @@ export default function DailyPage() {
             </div>
           </main>
 
-          {/* status banner */}
+          {/* Win/Lose banner like standard game */}
           {showBanner && (
-            <div className="banner won">
+            <div className={`banner ${state}`}>
               <div className="banner-content">
-                <strong>Nice!</strong>&nbsp;Your result has been recorded.
+                <strong>{bannerText}</strong>
               </div>
             </div>
           )}
 
-          {/* on-screen keyboard identical look */}
-          {state !== "locked" && state !== "won" && (
-            <Keyboard onKey={(k) => {
-              if (state !== "playing") return;
-              if (k === "ENTER") return void submit();
-              if (k === "DEL") return setGuess(g => g.slice(0, -1));
-              if (guess.length < COLS && /^[A-Z]$/.test(k)) setGuess(g => g + k);
-            }} />
+          {/* On-screen keyboard (same markup/classes) */}
+          {state !== "locked" && !showBanner && (
+            <Keyboard
+              keyState={keyState}
+              onKey={(k) => {
+                if (state !== "playing") return;
+                if (k === "ENTER") return void submit();
+                if (k === "DEL") return setGuess(g => g.slice(0, -1));
+                if (guess.length < COLS && /^[A-Z]$/.test(k)) setGuess(g => g + k);
+              }}
+            />
           )}
 
-          {/* leaderboard card */}
+          {/* Leaderboard */}
           <Leaderboard />
         </div>
       </div>
@@ -166,21 +200,37 @@ export default function DailyPage() {
 }
 
 /* ------- Keyboard (same markup/classes as main game) ------- */
-function Keyboard({ onKey }: { onKey: (k: string) => void }) {
+function Keyboard({
+  keyState,
+  onKey,
+}: {
+  keyState: Record<string, MarkLabel>;
+  onKey: (k: string) => void;
+}) {
   const rows = [
     "QWERTYUIOP".split(""),
     "ASDFGHJKL".split(""),
     ["ENTER", ..."ZXCVBNM".split(""), "DEL"],
   ];
   return (
-    <div className="kb" role="group" aria-label="Keyboard"
-         onKeyDownCapture={(e) => { if (e.key === "Enter") e.stopPropagation(); }}>
+    <div
+      className="kb"
+      role="group"
+      aria-label="Keyboard"
+      onKeyDownCapture={(e) => { if (e.key === "Enter") e.stopPropagation(); }}
+    >
       {rows.map((r, i) => (
         <div className="krow" key={i}>
           {r.map((k) => {
             const wide = k === "ENTER" || k === "DEL" ? "wide" : "";
+            const st = keyState[k] ?? ""; // "", "miss", "present", "hit"
             return (
-              <button key={k} className={`key ${wide}`} onClick={() => onKey(k)} aria-label={k}>
+              <button
+                key={k}
+                className={`key ${st} ${wide}`}
+                onClick={() => onKey(k)}
+                aria-label={k}
+              >
                 {k}
               </button>
             );
@@ -197,7 +247,7 @@ function Leaderboard() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API}/api/daily/leaderboard`, { credentials: "include" });
+        const res = await fetch(daily("/leaderboard"), { credentials: "include" });
         if (!res.ok) throw new Error(await res.text());
         const j: { date: string; top: LeaderboardRow[] } = await res.json();
         setRows(Array.isArray(j.top) ? j.top : []);
