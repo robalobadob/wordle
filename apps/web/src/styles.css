@@ -61,6 +61,7 @@
   gap: 0.75rem;
   align-items: center;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .control {
@@ -383,7 +384,7 @@ input {
   align-items: center;
   gap: 0.75rem;
 }
-.greeting {
+.nowrap {
   white-space: nowrap;
 }
 
@@ -398,12 +399,11 @@ input {
 /* =========================================================
    SMALL UTILITIES 
    --------------------------------------------------------- */
-.text-sm { font-size: 0.9rem; }
-.muted { opacity: 0.7; }  
+
 .mt-2 { margin-top: 0.5rem; }
 .mt-3 { margin-top: 0.75rem; }
 
-.hstack { display: flex; align-items: center; gap: 0.5rem; }
+.hstack { display: flex; align-items: center; gap: 0.5rem; justify-content: center;}
 
 .link { color: #0a66c2; text-decoration: none; }
 .link:hover { text-decoration: underline; }
