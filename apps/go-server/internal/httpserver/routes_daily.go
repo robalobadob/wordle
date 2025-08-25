@@ -132,12 +132,12 @@ func (d *dailyServer) handleNew(w http.ResponseWriter, r *http.Request) {
 
 // ---- /daily/guess ---------------------------------------------------------
 
-type guessReq struct {
+type dailyGuessReq struct {
 	GameID string `json:"gameId"`
 	Word   string `json:"word"`
 }
 
-type guessRes struct {
+type dailyGuessRes struct {
 	Marks   []int  `json:"marks"`
 	State   string `json:"state"` // in_progress|won|locked
 	Guesses int    `json:"guesses"`
@@ -150,7 +150,7 @@ func (d *dailyServer) handleGuess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var p guessReq
+	var p dailyGuessReq
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -173,7 +173,7 @@ func (d *dailyServer) handleGuess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if sess.Finished {
-		_ = json.NewEncoder(w).Encode(guessRes{Marks: []int{}, State: "locked", Guesses: sess.Guesses})
+		_ = json.NewEncoder(w).Encode(dailyGuessRes{Marks: []int{}, State: "locked", Guesses: sess.Guesses})
 		return
 	}
 
@@ -200,11 +200,11 @@ func (d *dailyServer) handleGuess(w http.ResponseWriter, r *http.Request) {
 		_ = d.store.InsertResult(r.Context(), daily.Result{
 			UserID: uid, Date: date, WordIndex: sess.WordIndex, Guesses: sess.Guesses, ElapsedMs: elapsed,
 		})
-		_ = json.NewEncoder(w).Encode(guessRes{Marks: marks, State: "won", Guesses: sess.Guesses})
+		_ = json.NewEncoder(w).Encode(dailyGuessRes{Marks: marks, State: "won", Guesses: sess.Guesses})
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(guessRes{Marks: marks, State: "in_progress", Guesses: sess.Guesses})
+	_ = json.NewEncoder(w).Encode(dailyGuessRes{Marks: marks, State: "in_progress", Guesses: sess.Guesses})
 }
 
 func allHits(m []int) bool {
