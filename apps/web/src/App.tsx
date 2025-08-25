@@ -29,7 +29,7 @@ export default function App() {
 }
 
 function GameScreen() {
-  const { me, logout } = useAuth();
+  const { me } = useAuth();
 
   const [mode, setMode] = useState<Mode>(() => (localStorage.getItem('mode') as Mode) || 'normal');
   const [cb, setCb] = useState(() => localStorage.getItem('cb') === '1');
@@ -146,26 +146,9 @@ function GameScreen() {
     <Header />
     <div className={`app ${cb ? 'cb' : ''}`}>
       <div className="shell">
-        {/* Header */}
+        {/* Header: title + controls only */}
         <header className="header">
           <h1 className="title">{MODE_TITLES[mode]}</h1>
-
-          {/* tiny auth UI */}
-          <div className="auth-mini">
-            {me ? (
-              <span className="auth-in">
-                <span className="muted">Signed in as </span>
-                <strong>@{me.username}</strong>{' '}
-                <a href="#/profile" className="link">Profile</a>{' '}
-                <button className="link" onClick={logout}>Logout</button>
-              </span>
-            ) : (
-              <span className="auth-out">
-                <a className="link" href="#/auth">Sign in</a>{' '}
-                <a className="link" href="#/auth?mode=signup">Sign up</a>
-              </span>
-            )}
-          </div>
 
           <div className="controls" role="group" aria-label="Game controls">
             <label className="control">
@@ -188,7 +171,8 @@ function GameScreen() {
               New Game
             </button>
 
-            <label className="control switch" title="Color-blind palette">
+            <label className="control switch" title="Colour-blind palette">
+              <span className="nowrap">Colour Blind Palette</span>
               <input
                 type="checkbox"
                 checked={cb}
@@ -197,7 +181,6 @@ function GameScreen() {
                   localStorage.setItem('cb', e.target.checked ? '1' : '0');
                 }}
               />
-              <span>CB</span>
             </label>
           </div>
         </header>
