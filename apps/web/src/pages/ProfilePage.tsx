@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { apiGET } from "../lib/api";
+import Header from "../components/Header";
 
 type Stats = { id: string; gamesPlayed: number; wins: number; streak: number };
 type GameRow = { id: string; status: string; guesses: number; startedAt: string; finishedAt?: string };
@@ -32,6 +33,9 @@ export default function ProfilePage() {
   if (err) return <div className="p-4 text-red-600">{err}</div>;
 
   return (
+    <>
+    <Header />
+    <main className="page">
     <div className="profile">
       <h1 className="profile-title">@{me.username}</h1>
 
@@ -70,5 +74,7 @@ export default function ProfilePage() {
         )}
       </div>
     </div>
+    </main>
+    </>
   );
 }
