@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { apiGET, apiPOST } from "../lib/api";
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { apiGET, apiPOST } from '../lib/api';
 
 type Me = { id: string; username: string } | null;
 
@@ -20,7 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = async () => {
     try {
-      const m = await apiGET<Me>("/auth/me");
+      const m = await apiGET<Me>('/auth/me');
       setMe(m);
     } catch {
       setMe(null); // guest
@@ -29,18 +29,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+  }, []);
 
   const signup = async (u: string, p: string) => {
-    await apiPOST("/auth/signup", { username: u, password: p });
+    await apiPOST('/auth/signup', { username: u, password: p });
     await refresh(); // claims guest games on server
   };
   const login = async (u: string, p: string) => {
-    await apiPOST("/auth/login", { username: u, password: p });
+    await apiPOST('/auth/login', { username: u, password: p });
     await refresh();
   };
   const logout = async () => {
-    await apiPOST("/auth/logout");
+    await apiPOST('/auth/logout');
     await refresh();
   };
 

@@ -71,27 +71,38 @@ button:focus-visible {
    LOCK TO LIGHT THEME (avoid auto-darkening)
    --------------------------------------------------------- */
 :root {
-  color-scheme: light;       /* opt out of UA dark mode adjustments */
+  color-scheme: light; /* opt out of UA dark mode adjustments */
 }
 
-html, body {
-  background: #fafafa;       /* your app bg */
-  color: #111;               /* default text */
+html,
+body {
+  background: #fafafa; /* your app bg */
+  color: #111; /* default text */
 }
 
 /* Links */
-a { color: #0a66c2; }
-a:visited { color: #0a66c2; } /* prevent purple-on-dark surprises */
+a {
+  color: #0a66c2;
+}
+a:visited {
+  color: #0a66c2;
+} /* prevent purple-on-dark surprises */
 
 /* Form controls (explicit light colors) */
-input, select, textarea, button {
+input,
+select,
+textarea,
+button {
   color: #111;
   background: #fff;
   border: 1px solid #ddd;
 }
 
 /* Placeholder visibility on light bg */
-::placeholder { color: #9aa0a6; opacity: 1; }
+::placeholder {
+  color: #9aa0a6;
+  opacity: 1;
+}
 
 /* Safari/Chrome autofill forcing white text? Tame it. */
 input:-webkit-autofill,
@@ -101,4 +112,3 @@ select:-webkit-autofill {
   transition: background-color 100000s ease-in-out 0s; /* suppress yellow flash */
   caret-color: #111;
 }
-

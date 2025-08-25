@@ -282,10 +282,19 @@ input {
    --------------------------------------------------------- */
 
 /* shared helpers */
-.text-sm { font-size: 0.9rem; }
-.muted { opacity: 0.6; }
-.link { color: #0a66c2; text-decoration: none; }
-.link:hover { text-decoration: underline; }
+.text-sm {
+  font-size: 0.9rem;
+}
+.muted {
+  opacity: 0.6;
+}
+.link {
+  color: #0a66c2;
+  text-decoration: none;
+}
+.link:hover {
+  text-decoration: underline;
+}
 
 /* cards and layout atoms */
 .card {
@@ -294,8 +303,14 @@ input {
   padding: 12px;
   background: #fff;
 }
-.row-between { display: flex; justify-content: space-between; align-items: center; }
-.stack > * + * { margin-top: 0.5rem; } 
+.row-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.stack > * + * {
+  margin-top: 0.5rem;
+}
 
 /* primary button variant (reuses .btn base from existing CSS) */
 .btn-primary {
@@ -303,8 +318,13 @@ input {
   color: #fff;
   border-color: #000;
 }
-.btn-primary:hover { background: #222; }
-.btn:disabled { opacity: 0.7; cursor: not-allowed; }
+.btn-primary:hover {
+  background: #222;
+}
+.btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
 
 /* input styling (builds on your input base) */
 .input {
@@ -323,11 +343,13 @@ input {
 }
 .auth-title {
   margin: 0 0 0.75rem 0;
-  font-size: 1.25rem; 
-  font-weight: 700; 
+  font-size: 1.25rem;
+  font-weight: 700;
 }
 .form-vert {
-  display: flex; flex-direction: column; gap: 0.5rem; 
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 .alert.error {
   color: #b00020;
@@ -336,7 +358,7 @@ input {
 }
 .auth-foot {
   margin-top: 0.75rem;
-  font-size: 0.9rem; 
+  font-size: 0.9rem;
 }
 
 /* -------- Profile -------- */
@@ -347,37 +369,39 @@ input {
 }
 .profile-title {
   margin: 0 0 0.5rem 0;
-  font-size: 1.25rem;  
-  font-weight: 700;    
+  font-size: 1.25rem;
+  font-weight: 700;
 }
 .section-title {
-  margin: 0 0 0.5rem 0; 
-  font-weight: 600;  
+  margin: 0 0 0.5rem 0;
+  font-weight: 600;
 }
 .stats {
-  margin: 0 0 1rem 0;   
+  margin: 0 0 1rem 0;
   display: flex;
   gap: 1.5rem;
   align-items: center;
-  font-size: 0.9rem; 
+  font-size: 0.9rem;
 }
-.stat b { display: block; }
+.stat b {
+  display: block;
+}
 
 /* =========================================================
    HEADER (site chrome, separate from game .header)
    --------------------------------------------------------- */
-  .page {
-    max-width: 900px;
-    margin: 2rem auto; /* spacing below header */
-    padding: 0 1rem;
-    height: calc(100vh - 6rem); /* full viewport height minus header and margin */
-    display: flex;;
-  }
-   .site-header {
+.page {
+  max-width: 900px;
+  margin: 2rem auto; /* spacing below header */
+  padding: 0 1rem;
+  height: calc(100vh - 6rem); /* full viewport height minus header and margin */
+  display: flex;
+}
+.site-header {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  padding: 0.75rem 1rem; 
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid #e5e7eb;
   width: 100%;
   background: #fff;
@@ -401,21 +425,38 @@ input {
    --------------------------------------------------------- */
 .card-warn {
   background: #fff7cc;
-  border-color: #f3e08a; 
+  border-color: #f3e08a;
 }
 
 /* =========================================================
    SMALL UTILITIES 
    --------------------------------------------------------- */
 
-.mt-2 { margin-top: 0.5rem; }
-.mt-3 { margin-top: 0.75rem; }
+.mt-2 {
+  margin-top: 0.5rem;
+}
+.mt-3 {
+  margin-top: 0.75rem;
+}
 
-.hstack { display: flex; align-items: center; gap: 0.5rem; justify-content: center;}
+.hstack {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+}
 
-.link { color: #0a66c2; text-decoration: none; }
-.link:hover { text-decoration: underline; }
-.link-underline { color: inherit; text-decoration: underline; }
+.link {
+  color: #0a66c2;
+  text-decoration: none;
+}
+.link:hover {
+  text-decoration: underline;
+}
+.link-underline {
+  color: inherit;
+  text-decoration: underline;
+}
 
 .btn-link {
   background: none;
@@ -431,4 +472,6 @@ input {
   color: inherit;
   border: 1px solid #ddd;
 }
-.btn-outline:hover { background: #f7f7f7; }
+.btn-outline:hover {
+  background: #f7f7f7;
+}

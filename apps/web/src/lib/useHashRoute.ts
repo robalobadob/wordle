@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore } from 'react';
 
 /**
  * Stable hash router: re-renders on hashchange, programmatic changes,
@@ -19,17 +19,17 @@ export function useHashRoute(): string {
     // Also catch back/forward in some browsers
     const onPop = () => onStoreChange();
 
-    window.addEventListener("hashchange", onHash);
-    window.addEventListener("popstate", onPop);
-    document.addEventListener("click", onClick, true); // capture phase
+    window.addEventListener('hashchange', onHash);
+    window.addEventListener('popstate', onPop);
+    document.addEventListener('click', onClick, true); // capture phase
 
     return () => {
-      window.removeEventListener("hashchange", onHash);
-      window.removeEventListener("popstate", onPop);
-      document.removeEventListener("click", onClick, true);
+      window.removeEventListener('hashchange', onHash);
+      window.removeEventListener('popstate', onPop);
+      document.removeEventListener('click', onClick, true);
     };
   };
 
-  const getSnapshot = () => window.location.hash || "#/";
+  const getSnapshot = () => window.location.hash || '#/';
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

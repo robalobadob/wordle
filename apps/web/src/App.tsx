@@ -3,16 +3,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Mark } from '@wordle/game-core';
 import './styles.css';
 import { useAuth } from './auth/AuthProvider';
-import { useHashRoute } from "./lib/useHashRoute";
+import { useHashRoute } from './lib/useHashRoute';
 import SaveProgressBanner from './components/SaveProgressBanner';
-import Header from "./components/Header";
+import Header from './components/Header';
 import AuthPage from './pages/AuthPage';
 import ProfilePage from './pages/ProfilePage';
 import DailyPage from './pages/DailyPage';
 
 type Mode = 'normal' | 'cheat' | 'daily';
 const API = import.meta.env.VITE_API_URL as string;
-const ROWS = 6, COLS = 5;
+const ROWS = 6,
+  COLS = 5;
 type State = 'idle' | 'playing' | 'won' | 'lost' | 'error';
 
 const MODE_TITLES: Record<Mode, string> = {
@@ -34,7 +35,9 @@ export default function App() {
 function GameScreen() {
   const { me } = useAuth();
 
-  const [mode, setMode] = useState<Mode>(() => (localStorage.getItem('mode') as Mode) || 'normal');
+  const [mode, setMode] = useState<Mode>(
+    () => (localStorage.getItem('mode') as Mode) || 'normal',
+  );
   const [cb, setCb] = useState(() => localStorage.getItem('cb') === '1');
   const [gameId, setGameId] = useState<string | null>(null);
   const [state, setState] = useState<State>('idle');
@@ -75,7 +78,9 @@ function GameScreen() {
       if (!r.ok) throw new Error(`/game/new ${r.status}`);
       const data = (await r.json()) as { gameId: string };
       setGameId(data.gameId);
-      setRows([]); setMarks([]); setGuess('');
+      setRows([]);
+      setMarks([]);
+      setGuess('');
       setState('playing');
     } catch (e: any) {
       setErr(e?.message ?? String(e));
@@ -87,11 +92,13 @@ function GameScreen() {
     if (!API) return;
     if (mode !== 'daily') {
       newGame(mode);
-    } 
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { document.title = MODE_TITLES[mode]; }, [mode]);
+  useEffect(() => {
+    document.title = MODE_TITLES[mode];
+  }, [mode]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -99,9 +106,9 @@ function GameScreen() {
       if (e.key === 'Enter' || e.key === 'Backspace') e.preventDefault();
       if (e.repeat) return;
       if (e.key === 'Enter') return void submit();
-      if (e.key === 'Backspace') return setGuess(g => g.slice(0, -1));
+      if (e.key === 'Backspace') return setGuess((g) => g.slice(0, -1));
       const k = e.key.toUpperCase();
-      if (/^[A-Z]$/.test(k) && guess.length < COLS) setGuess(g => g + k);
+      if (/^[A-Z]$/.test(k) && guess.length < COLS) setGuess((g) => g + k);
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -119,19 +126,25 @@ function GameScreen() {
       });
       if (!r.ok) {
         const text = (await r.text()).trim();
-        const msg =
-          /not in word list/i.test(text) ? 'Not in word list' :
-          /invalid/i.test(text) ? 'Enter a valid 5‑letter word' :
-          text || `Error ${r.status}`;
+        const msg = /not in word list/i.test(text)
+          ? 'Not in word list'
+          : /invalid/i.test(text)
+            ? 'Enter a valid 5‑letter word'
+            : text || `Error ${r.status}`;
         setErr(msg);
-        const rowEl = document.querySelectorAll<HTMLElement>('.row')[rows.length] ?? null;
-        rowEl?.classList.add('shake'); setTimeout(() => rowEl?.classList.remove('shake'), 400);
+        const rowEl =
+          document.querySelectorAll<HTMLElement>('.row')[rows.length] ?? null;
+        rowEl?.classList.add('shake');
+        setTimeout(() => rowEl?.classList.remove('shake'), 400);
         setTimeout(() => setErr(null), 1500);
         return;
       }
-      const data = (await r.json()) as { marks: Mark[]; state: Exclude<State, 'idle' | 'error'>; };
-      setRows(rs => [...rs, guess.toUpperCase()]);
-      setMarks(ms => [...ms, data.marks]);
+      const data = (await r.json()) as {
+        marks: Mark[];
+        state: Exclude<State, 'idle' | 'error'>;
+      };
+      setRows((rs) => [...rs, guess.toUpperCase()]);
+      setMarks((ms) => [...ms, data.marks]);
       setGuess('');
       setState(data.state);
     } catch (e: any) {
@@ -144,111 +157,133 @@ function GameScreen() {
   function onKeyClick(k: string) {
     if (state !== 'playing') return;
     if (k === 'ENTER') return void submit();
-    if (k === 'DEL') return setGuess(g => g.slice(0, -1));
-    if (guess.length < COLS && /^[A-Z]$/.test(k)) setGuess(g => g + k);
+    if (k === 'DEL') return setGuess((g) => g.slice(0, -1));
+    if (guess.length < COLS && /^[A-Z]$/.test(k)) setGuess((g) => g + k);
   }
 
   const showBanner = state === 'won' || state === 'lost';
-  const bannerText = state === 'won' ? 'You won!' : state === 'lost' ? 'You lost' : '';
+  const bannerText =
+    state === 'won' ? 'You won!' : state === 'lost' ? 'You lost' : '';
 
   return (
     <>
-    <Header />
-    <div className={`app ${cb ? 'cb' : ''}`}>
-      <div className="shell">
-        {/* Header: title + controls only */}
-        <header className="header">
-          <h1 className="title">{MODE_TITLES[mode]}</h1>
+      <Header />
+      <div className={`app ${cb ? 'cb' : ''}`}>
+        <div className="shell">
+          {/* Header: title + controls only */}
+          <header className="header">
+            <h1 className="title">{MODE_TITLES[mode]}</h1>
 
-          <div className="controls" role="group" aria-label="Game controls">
-            <label className="control">
-              <span className="label">Mode</span>
-              <select
-                value={mode}
-                onChange={(e) => {
-                  const m = e.target.value as Mode;
-                  localStorage.setItem('mode', m);
-                  if (m === 'daily') {
+            <div className="controls" role="group" aria-label="Game controls">
+              <label className="control">
+                <span className="label">Mode</span>
+                <select
+                  value={mode}
+                  onChange={(e) => {
+                    const m = e.target.value as Mode;
+                    localStorage.setItem('mode', m);
+                    if (m === 'daily') {
+                      setMode(m);
+                      // Navigate to the Daily page; don't start a normal game
+                      if (location.hash !== '#/daily')
+                        location.hash = '#/daily';
+                      return;
+                    }
+                    // switching away from daily → ensure we're on main game route
+                    if (location.hash === '#/daily') location.hash = '#/';
                     setMode(m);
-                    // Navigate to the Daily page; don't start a normal game
-                    if (location.hash !== '#/daily') location.hash = '#/daily';
-                    return;
-                  }
-                  // switching away from daily → ensure we're on main game route
-                  if (location.hash === '#/daily') location.hash = '#/';
-                  setMode(m);
-                  newGame(m);
-                }}
+                    newGame(m);
+                  }}
+                >
+                  <option value="normal">Normal</option>
+                  <option value="cheat">Cheating Host</option>
+                  <option value="daily">Daily Challenge</option>
+                </select>
+              </label>
+
+              <button
+                className="btn"
+                onClick={() => newGame(mode)}
+                disabled={mode === 'daily'}
               >
-                <option value="normal">Normal</option>
-                <option value="cheat">Cheating Host</option>
-                <option value="daily">Daily Challenge</option>
-              </select>
-            </label>
-
-            <button className="btn" onClick={() => newGame(mode)} disabled={mode === 'daily'}>
-              New Game
-            </button>
-
-            <label className="control switch" title="Colour-blind palette">
-              <span className="nowrap">Colour Blind Palette</span>
-              <input
-                type="checkbox"
-                checked={cb}
-                onChange={(e) => {
-                  setCb(e.target.checked);
-                  localStorage.setItem('cb', e.target.checked ? '1' : '0');
-                }}
-              />
-            </label>
-          </div>
-        </header>
-
-        {/* Guest CTA (top) */}
-        {!me && state === 'playing' && <SaveProgressBanner />}
-
-        {/* Toast */}
-        <div className={`toast ${err ? 'show' : ''}`} role="status" aria-live="polite">
-          {err ?? ''}
-        </div>
-
-        {/* Board */}
-        <main className="main">
-          <div className="board" style={{ gridTemplateRows: `repeat(${ROWS}, 1fr)` }}>
-            {Array.from({ length: ROWS }).map((_, r) => {
-              const g = rows[r] ?? (r === rows.length ? guess.toUpperCase() : '');
-              const m = marks[r];
-              return (
-                <div className="row" key={r}>
-                  {Array.from({ length: COLS }).map((__, c) => {
-                    const letter = g[c] ?? '';
-                    const status: Mark | '' = m?.[c] ?? '';
-                    const cls = status ? `tile ${status}` : letter ? 'tile filled' : 'tile';
-                    return <div key={c} className={cls}>{letter}</div>;
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </main>
-
-        {/* Status banner */}
-        {showBanner && (
-          <div className={`banner ${state}`}>
-            <div className="banner-content">
-              <strong>{bannerText}</strong>
-              <button className="btn ghost" onClick={() => newGame(mode)}>
-                Play again
+                New Game
               </button>
-            </div>
-            {!me && <SaveProgressBanner />}
-          </div>
-        )}
 
-        {/* On-screen keyboard */}
-        <Keyboard keyState={keyState} onKey={onKeyClick} />
+              <label className="control switch" title="Colour-blind palette">
+                <span className="nowrap">Colour Blind Palette</span>
+                <input
+                  type="checkbox"
+                  checked={cb}
+                  onChange={(e) => {
+                    setCb(e.target.checked);
+                    localStorage.setItem('cb', e.target.checked ? '1' : '0');
+                  }}
+                />
+              </label>
+            </div>
+          </header>
+
+          {/* Guest CTA (top) */}
+          {!me && state === 'playing' && <SaveProgressBanner />}
+
+          {/* Toast */}
+          <div
+            className={`toast ${err ? 'show' : ''}`}
+            role="status"
+            aria-live="polite"
+          >
+            {err ?? ''}
+          </div>
+
+          {/* Board */}
+          <main className="main">
+            <div
+              className="board"
+              style={{ gridTemplateRows: `repeat(${ROWS}, 1fr)` }}
+            >
+              {Array.from({ length: ROWS }).map((_, r) => {
+                const g =
+                  rows[r] ?? (r === rows.length ? guess.toUpperCase() : '');
+                const m = marks[r];
+                return (
+                  <div className="row" key={r}>
+                    {Array.from({ length: COLS }).map((__, c) => {
+                      const letter = g[c] ?? '';
+                      const status: Mark | '' = m?.[c] ?? '';
+                      const cls = status
+                        ? `tile ${status}`
+                        : letter
+                          ? 'tile filled'
+                          : 'tile';
+                      return (
+                        <div key={c} className={cls}>
+                          {letter}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </main>
+
+          {/* Status banner */}
+          {showBanner && (
+            <div className={`banner ${state}`}>
+              <div className="banner-content">
+                <strong>{bannerText}</strong>
+                <button className="btn ghost" onClick={() => newGame(mode)}>
+                  Play again
+                </button>
+              </div>
+              {!me && <SaveProgressBanner />}
+            </div>
+          )}
+
+          {/* On-screen keyboard */}
+          <Keyboard keyState={keyState} onKey={onKeyClick} />
+        </div>
       </div>
-    </div>
     </>
   );
 }
@@ -270,7 +305,9 @@ function Keyboard({
       className="kb"
       role="group"
       aria-label="Keyboard"
-      onKeyDownCapture={(e) => { if (e.key === 'Enter') e.stopPropagation(); }}
+      onKeyDownCapture={(e) => {
+        if (e.key === 'Enter') e.stopPropagation();
+      }}
     >
       {rows.map((r, i) => (
         <div className="krow" key={i}>
