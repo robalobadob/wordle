@@ -8,8 +8,9 @@ import SaveProgressBanner from './components/SaveProgressBanner';
 import Header from "./components/Header";
 import AuthPage from './pages/AuthPage';
 import ProfilePage from './pages/ProfilePage';
+import DailyPage from './pages/DailyPage';
 
-type Mode = 'normal' | 'cheat';
+type Mode = 'normal' | 'cheat' | 'daily';
 const API = import.meta.env.VITE_API_URL as string;
 const ROWS = 6, COLS = 5;
 type State = 'idle' | 'playing' | 'won' | 'lost' | 'error';
@@ -17,6 +18,7 @@ type State = 'idle' | 'playing' | 'won' | 'lost' | 'error';
 const MODE_TITLES: Record<Mode, string> = {
   normal: 'Classic Wordle',
   cheat: 'Cheating Host',
+  daily: 'Daily Challenge',
 };
 
 export default function App() {
@@ -24,6 +26,7 @@ export default function App() {
   const page = useMemo(() => (hash || '#/').split('?')[0], [hash]);
   if (page === '#/auth') return <AuthPage key={hash} />;
   if (page === '#/profile') return <ProfilePage key={hash} />;
+  if (page === '#/daily') return <DailyPage key={hash} />;
 
   return <GameScreen key="game" />;
 }
@@ -57,6 +60,10 @@ function GameScreen() {
   }, [rows, marks]);
 
   async function newGame(m: Mode) {
+    if (m === 'daily') {
+      // Daily mode is handled on its own page
+      return;
+    }
     try {
       setErr(null);
       const r = await fetch(`${API}/game/new`, {
@@ -77,7 +84,10 @@ function GameScreen() {
   }
 
   useEffect(() => {
-    if (API) newGame(mode);
+    if (!API) return;
+    if (mode !== 'daily') {
+      newGame(mode);
+    } 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -157,17 +167,26 @@ function GameScreen() {
                 value={mode}
                 onChange={(e) => {
                   const m = e.target.value as Mode;
-                  setMode(m);
                   localStorage.setItem('mode', m);
+                  if (m === 'daily') {
+                    setMode(m);
+                    // Navigate to the Daily page; don't start a normal game
+                    if (location.hash !== '#/daily') location.hash = '#/daily';
+                    return;
+                  }
+                  // switching away from daily → ensure we're on main game route
+                  if (location.hash === '#/daily') location.hash = '#/';
+                  setMode(m);
                   newGame(m);
                 }}
               >
                 <option value="normal">Normal</option>
                 <option value="cheat">Cheating Host</option>
+                <option value="daily">Daily Challenge</option>
               </select>
             </label>
 
-            <button className="btn" onClick={() => newGame(mode)}>
+            <button className="btn" onClick={() => newGame(mode)} disabled={mode === 'daily'}>
               New Game
             </button>
 
