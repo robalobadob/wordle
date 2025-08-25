@@ -222,7 +222,7 @@ function GameScreen() {
                 Play again
               </button>
             </div>
-            {!me && <div className="mt-2"><SaveProgressBanner /></div>}
+            {!me && <SaveProgressBanner />}
           </div>
         )}
 
