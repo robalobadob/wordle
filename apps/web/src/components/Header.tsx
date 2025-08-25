@@ -9,7 +9,7 @@ export default function Header() {
       <nav className="nav">
         {me ? (
           <>
-            <span className="text-sm muted">Hello, {me.username}</span>
+            <span className="text-sm muted greeting">Hello, <strong>@{me.username}</strong>{' '}</span>
             <a className="text-sm link-underline" href="#/profile">Profile</a>
             <button className="text-sm btn-link link-underline" onClick={logout}>Log out</button>
           </>
