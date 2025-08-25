@@ -265,3 +265,150 @@ input {
 .key.wide {
   min-width: 64px;
 }
+
+/* =========================================================
+   AUTH / PROFILE PAGES
+   --------------------------------------------------------- */
+
+/* shared helpers */
+.text-sm { font-size: 0.9rem; }
+.muted { opacity: 0.6; }
+.link { color: #0a66c2; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+
+/* cards and layout atoms */
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+.row-between { display: flex; justify-content: space-between; align-items: center; }
+.stack > * + * { margin-top: 0.5rem; } 
+
+/* primary button variant (reuses .btn base from existing CSS) */
+.btn-primary {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+.btn-primary:hover { background: #222; }
+.btn:disabled { opacity: 0.7; cursor: not-allowed; }
+
+/* input styling (builds on your input base) */
+.input {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  width: 100%;
+}
+
+/* -------- Auth -------- */
+.auth {
+  padding: 1rem;
+  width: min(92vw, 420px);
+  margin: 0 auto;
+}
+.auth-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.25rem; 
+  font-weight: 700; 
+}
+.form-vert {
+  display: flex; flex-direction: column; gap: 0.5rem; 
+}
+.alert.error {
+  color: #b00020;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+.auth-foot {
+  margin-top: 0.75rem;
+  font-size: 0.9rem; 
+}
+
+/* -------- Profile -------- */
+.profile {
+  padding: 1rem;
+  width: min(92vw, 900px);
+  margin: 0 auto;
+}
+.profile-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;  
+  font-weight: 700;    
+}
+.section-title {
+  margin: 0 0 0.5rem 0; 
+  font-weight: 600;  
+}
+.stats {
+  margin: 0 0 1rem 0;   
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  font-size: 0.9rem; 
+}
+.stat b { display: block; }
+
+/* =========================================================
+   HEADER (site chrome, separate from game .header)
+   --------------------------------------------------------- */
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem; 
+  border-bottom: 1px solid #e5e7eb;
+  width: 100%;
+  background: #fff;
+}
+.site-header .brand {
+  font-weight: 700;
+  text-decoration: none;
+  color: inherit;
+}
+.site-header .nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* =========================================================
+   SAVE PROGRESS BANNER
+   --------------------------------------------------------- */
+.card-warn {
+  background: #fff7cc;
+  border-color: #f3e08a; 
+}
+
+/* =========================================================
+   SMALL UTILITIES 
+   --------------------------------------------------------- */
+.text-sm { font-size: 0.9rem; }
+.muted { opacity: 0.7; }  
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+
+.hstack { display: flex; align-items: center; gap: 0.5rem; }
+
+.link { color: #0a66c2; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+.link-underline { color: inherit; text-decoration: underline; }
+
+.btn-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+
+/* outline button variant to pair with .btn-primary */
+.btn-outline {
+  background: #fff;
+  color: inherit;
+  border: 1px solid #ddd;
+}
+.btn-outline:hover { background: #f7f7f7; }
