@@ -1,35 +1,67 @@
+/**
+ * DailyPage.tsx
+ *
+ * Implements the daily challenge mode.
+ * - Player can play only once per day.
+ * - Tracks gameId via server, validates guesses remotely.
+ * - Displays win/lose banners, error toasts, and leaderboard of top players.
+ * - Keyboard handling is identical to the standard game (both physical + on-screen).
+ */
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Header from '../components/Header';
 
+/** Game lifecycle states for daily challenge. */
 type PlayState = 'idle' | 'playing' | 'won' | 'lost' | 'locked';
+
+/** Status for a single letter cell. */
 type MarkLabel = 'miss' | 'present' | 'hit';
 
+/** Shape of guess responses returned from server. */
 type GuessResponse = {
   marks: number[]; // 0=miss,1=present,2=hit
   state: 'in_progress' | 'won' | 'locked';
   guesses: number;
 };
 
+/** Leaderboard row returned by server. */
 type LeaderboardRow = { userId: string; guesses: number; elapsedMs: number };
 
+/** API base. Falls back to localhost if no VITE_API_URL defined. */
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:5175';
-const ROWS = 6,
-  COLS = 5;
-const daily = (p: string) => `${API}/daily${p}`; // no /api prefix
+const ROWS = 6, COLS = 5;
 
+/** Daily API wrapper (no /api prefix). */
+const daily = (p: string) => `${API}/daily${p}`;
+
+/**
+ * Main page component for daily challenge.
+ * Handles:
+ * - Starting the daily game
+ * - User input (keyboard + on-screen)
+ * - Submitting guesses to server
+ * - Rendering the board, banners, and leaderboard
+ */
 export default function DailyPage() {
+  // --- Game session state ----------------------------------------------------
   const [gameId, setGameId] = useState<string | null>(null);
   const [state, setState] = useState<PlayState>('idle');
   const [err, setErr] = useState<string | null>(null);
 
+  // --- Board state -----------------------------------------------------------
   const [rows, setRows] = useState<string[]>([]);
   const [marks, setMarks] = useState<MarkLabel[][]>([]);
   const [guess, setGuess] = useState<string>('');
 
+  // Prevent duplicate submissions; store start time for elapsed calc
   const submittingRef = useRef(false);
   const startedRef = useRef<number | null>(null);
 
-  // Start today's game
+  /**
+   * On mount: start today's game.
+   * - If server returns `played: true`, lock the board (already played today).
+   * - Otherwise, initialize with new gameId.
+   */
   useEffect(() => {
     (async () => {
       try {
@@ -54,7 +86,10 @@ export default function DailyPage() {
     })();
   }, []);
 
-  // Keyboard: mirror main game behavior
+  /**
+   * Global keyboard listener (physical keyboard).
+   * Matches main game behavior: Enter, Backspace, A–Z.
+   */
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (state !== 'playing') return;
@@ -69,11 +104,15 @@ export default function DailyPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [state, guess.length]);
 
+  /** Map numeric marks [0,1,2] from server into semantic labels. */
   function mapMarks(nums: number[]): MarkLabel[] {
     return nums.map((n) => (n === 2 ? 'hit' : n === 1 ? 'present' : 'miss'));
   }
 
-  // Build per-letter best status for keyboard (miss < present < hit)
+  /**
+   * Derived keyboard coloring (on-screen).
+   * For each letter, retain "best" status so far (hit > present > miss).
+   */
   const keyState = useMemo(() => {
     const rank: Record<MarkLabel, number> = { miss: 0, present: 1, hit: 2 };
     const best: Record<string, MarkLabel> = {};
@@ -88,6 +127,12 @@ export default function DailyPage() {
     return best;
   }, [rows, marks]);
 
+  /**
+   * Submit the current guess to the server.
+   * - Validates input (must be 5 letters, not already submitting).
+   * - On error, shows toast + shake animation on current row.
+   * - On success, appends guess + marks, updates state (won/lost/in_progress).
+   */
   async function submit() {
     if (!gameId || guess.length !== COLS || submittingRef.current) return;
     submittingRef.current = true;
@@ -98,14 +143,18 @@ export default function DailyPage() {
         credentials: 'include',
         body: JSON.stringify({ gameId: gameId, word: guess.toLowerCase() }),
       });
+
+      // Handle errors gracefully
       if (!res.ok) {
         const text = (await res.text()).trim();
         const msg = /word not allowed/i.test(text)
           ? 'Not in word list'
           : /invalid/i.test(text)
-            ? 'Enter a valid 5‑letter word'
+            ? 'Enter a valid 5-letter word'
             : text || `Error ${res.status}`;
         setErr(msg);
+
+        // Animate "shake" for current row
         const rowEl =
           document.querySelectorAll<HTMLElement>('.row')[rows.length] ?? null;
         rowEl?.classList.add('shake');
@@ -113,6 +162,8 @@ export default function DailyPage() {
         setTimeout(() => setErr(null), 1500);
         return;
       }
+
+      // Success
       const j: GuessResponse = await res.json();
       setRows((rs) => [...rs, guess.toUpperCase()]);
       setMarks((ms) => [...ms, mapMarks(j.marks)]);
@@ -121,9 +172,8 @@ export default function DailyPage() {
       if (j.state === 'won') {
         setState('won');
       } else {
-        // Detect loss when we've used all rows and server is still in_progress
         const nextCount = rows.length + 1;
-        if (nextCount >= ROWS) setState('lost');
+        if (nextCount >= ROWS) setState('lost'); // all rows used
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Guess failed');
@@ -132,6 +182,7 @@ export default function DailyPage() {
     }
   }
 
+  // Derived banner state/text
   const showBanner = state === 'won' || state === 'lost';
   const bannerText =
     state === 'won' ? 'You won!' : state === 'lost' ? 'You lost' : '';
@@ -146,14 +197,14 @@ export default function DailyPage() {
             <h1 className="title">Daily Challenge</h1>
           </header>
 
-          {/* Notice when already played */}
+          {/* Info when user already played today */}
           {state === 'locked' && (
             <div className="toast show" role="status" aria-live="polite">
               You already played today. Check the leaderboard below.
             </div>
           )}
 
-          {/* Toast (errors) */}
+          {/* Error toast */}
           <div
             className={`toast ${err ? 'show' : ''}`}
             role="status"
@@ -162,7 +213,7 @@ export default function DailyPage() {
             {err ?? ''}
           </div>
 
-          {/* Board (identical structure/classes to main game) */}
+          {/* Board (6x5 grid) */}
           <main className="main">
             <div
               className="board"
@@ -194,7 +245,7 @@ export default function DailyPage() {
             </div>
           </main>
 
-          {/* Win/Lose banner like standard game */}
+          {/* Win/Lose banner */}
           {showBanner && (
             <div className={`banner ${state}`}>
               <div className="banner-content">
@@ -203,7 +254,7 @@ export default function DailyPage() {
             </div>
           )}
 
-          {/* On-screen keyboard (same markup/classes) */}
+          {/* On-screen keyboard (disabled if game locked or finished) */}
           {state !== 'locked' && !showBanner && (
             <Keyboard
               keyState={keyState}
@@ -217,7 +268,7 @@ export default function DailyPage() {
             />
           )}
 
-          {/* Leaderboard */}
+          {/* Daily leaderboard */}
           <Leaderboard />
         </div>
       </div>
@@ -225,7 +276,12 @@ export default function DailyPage() {
   );
 }
 
-/* ------- Keyboard (same markup/classes as main game) ------- */
+/* ------------------- Keyboard ------------------- */
+/**
+ * On-screen keyboard for daily mode.
+ * - Uses same layout/classes as main game.
+ * - Highlights keys according to best known Mark.
+ */
 function Keyboard({
   keyState,
   onKey,
@@ -269,7 +325,12 @@ function Keyboard({
   );
 }
 
-/* ------- Leaderboard ------- */
+/* ------------------- Leaderboard ------------------- */
+/**
+ * Leaderboard shows top 20 players for today’s daily game.
+ * - Fetches from `/daily/leaderboard`.
+ * - Displays username, number of guesses, and elapsed time.
+ */
 function Leaderboard() {
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   useEffect(() => {

@@ -1,7 +1,24 @@
 import { useAuth } from '../auth/AuthProvider';
 
+/**
+ * SaveProgressBanner
+ *
+ * A guest-only call-to-action banner encouraging players
+ * to sign in or create an account.
+ *
+ * - Shown only when `me` (the authenticated user) is null/undefined.
+ * - Provides links to login (`#/auth`) and signup (`#/auth?mode=signup`).
+ * - Highlights benefits: saving streaks, viewing history, and challenging friends.
+ *
+ * Usage:
+ * ```tsx
+ * {!me && state === 'playing' && <SaveProgressBanner />}
+ * ```
+ */
 export default function SaveProgressBanner() {
   const { me } = useAuth();
+
+  // Do not render banner for authenticated users
   if (me) return null;
 
   return (

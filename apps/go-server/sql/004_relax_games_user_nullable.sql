@@ -1,3 +1,36 @@
+-- apps/go-server/sql/004_relax_games_user_nullable.sql
+--
+-- Migration #4: Relax `games.user_id` constraint to support guest ownership.
+--
+-- Context:
+--   • In migration #002, every game required a `user_id`.
+--   • Migration #003 introduced `anonymous_id` but `user_id` was still NOT NULL,
+--     so the schema could not represent true guest-only games.
+--   • This migration makes `user_id` nullable and adds a CHECK constraint to ensure
+--     that at least one owner field (`user_id` OR `anonymous_id`) is present.
+--
+-- Implementation notes:
+--   • SQLite doesn’t support dropping constraints in-place.
+--     → We rebuild the table:
+--        1. Temporarily disable foreign_keys.
+--        2. Create a new `games_new` table with desired schema.
+--        3. Copy existing data from old `games` (user-owned).
+--        4. Drop old table and rename new one.
+--        5. Recreate indexes.
+--        6. Re-enable foreign_keys.
+--
+-- Schema differences:
+--   • user_id is now nullable.
+--   • anonymous_id remains nullable.
+--   • CHECK constraint enforces (user_id IS NOT NULL OR anonymous_id IS NOT NULL).
+--
+-- Result:
+--   • Games can be owned by either:
+--       - a registered user (user_id filled, anonymous_id NULL), OR
+--       - a guest session (anonymous_id filled, user_id NULL).
+--   • Server logic (see `claimAnonGames` in httpserver/server.go)
+--     can migrate anonymous games to a registered user after signup.
+
 PRAGMA foreign_keys=OFF;
 BEGIN TRANSACTION;
 
