@@ -55,6 +55,9 @@ func New(st store.Store, db *sql.DB) *Server {
 	s.r.With(s.withOptionalAuth()).Post("/game/new", s.handleNewGame)
 	s.r.With(s.withOptionalAuth()).Post("/game/guess", s.handleGuess)
 
+	// Daily Challenge (async mode) — OPTIONAL AUTH (guests OK)
+	s.mountDaily(s.r.With(s.withOptionalAuth()))
+
 	// Auth + profile endpoints (gated)
 	s.mountAuthRoutes()
 
