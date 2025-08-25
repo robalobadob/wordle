@@ -2,13 +2,18 @@
   "name": "wordle",
   "private": true,
   "packageManager": "npm@10.8.1",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "dev": "concurrently -n server,web -c auto \"npm run -w @wordle/server dev\" \"npm run -w @wordle/web dev\"",
-    "build": "npm run -w @wordle/game-core build && npm run -w @wordle/protocol build && npm run -w @wordle/server build && npm run -w @wordle/web build",
+    "dev": "concurrently -n go,web -c auto \"make -C apps/go-server run\" \"npm run -w @wordle/web dev\"",
+    "dev:go": "make -C apps/go-server run",
+    "dev:web": "npm run -w @wordle/web dev",
+
+    "build": "npm run -w @wordle/game-core build && npm run -w @wordle/protocol build && make -C apps/go-server build && npm run -w @wordle/web build",
+    "build:go": "make -C apps/go-server build",
+
+    "docker:go:build": "make -C apps/go-server docker-build",
+    "docker:go:run": "make -C apps/go-server docker-run",
+
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx,.js --fix",
     "format": "prettier --write .",
