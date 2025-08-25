@@ -32,24 +32,42 @@ export default function ProfilePage() {
   if (err) return <div className="p-4 text-red-600">{err}</div>;
 
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-bold mb-2">@{me.username}</h1>
+    <div className="profile">
+      <h1 className="profile-title">@{me.username}</h1>
+
       {stats && (
-        <div className="border rounded p-3 mb-4 text-sm flex gap-6">
-          <div><b>Games</b><div>{stats.gamesPlayed}</div></div>
-          <div><b>Wins</b><div>{stats.wins}</div></div>
-          <div><b>Streak</b><div>{stats.streak}</div></div>
+        <div className="card stats">
+          <div className="stat">
+            <b>Games</b>
+            <div>{stats.gamesPlayed}</div>
+          </div>
+          <div className="stat">
+            <b>Wins</b>
+            <div>{stats.wins}</div>
+          </div>
+          <div className="stat">
+            <b>Streak</b>
+            <div>{stats.streak}</div>
+          </div>
         </div>
       )}
-      <h2 className="font-semibold mb-2">Recent games</h2>
-      <div className="space-y-2">
-        {games.map(g => (
-          <div key={g.id} className="border rounded p-2 text-sm flex justify-between">
-            <div>#{g.id.slice(0,8)} • {g.status} • {g.guesses} guesses</div>
-            <div className="opacity-60">{new Date(g.startedAt).toLocaleString()}</div>
+
+      <h2 className="section-title">Recent games</h2>
+
+      <div className="stack">
+        {games.map((g) => (
+          <div key={g.id} className="card row-between text-sm">
+            <div>
+              #{g.id.slice(0, 8)} • {g.status} • {g.guesses} guesses
+            </div>
+            <div className="muted">
+              {new Date(g.startedAt).toLocaleString()}
+            </div>
           </div>
         ))}
-        {games.length === 0 && <div className="opacity-60 text-sm">No games yet.</div>}
+        {games.length === 0 && (
+          <div className="muted text-sm">No games yet.</div>
+        )}
       </div>
     </div>
   );
