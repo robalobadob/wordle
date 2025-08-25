@@ -13,18 +13,9 @@ import (
 	"github.com/robalobadob/wordle/apps/go-server/internal/words"
 )
 
-// --- dependencies we need from words pkg as an interface (so it's testable)
-type dailyDeps interface {
-	Answers() []string
-	Allowed() map[string]struct{}
-	Score(guess, answer string) []int // 0=miss,1=present,2=hit
-}
-
-// server state for /daily
 type dailyServer struct {
 	srv      *Server
 	store    *daily.Store
-	w        dailyDeps
 	salt     string
 	sessions map[string]*dailySession // key = userID|date
 	mu       sync.Mutex
@@ -41,23 +32,13 @@ type dailySession struct {
 	Finished  bool
 }
 
-// adaptor to words package
-type wordsPkg struct{}
-
-func (wordsPkg) Answers() []string                { return words.Answers() }
-func (wordsPkg) Allowed() map[string]struct{}     { return words.Allowed() }
-func (wordsPkg) Score(g, a string) []int          { return words.Score(g, a) }
-
-// mountDaily registers /daily routes under the given router.
 func (s *Server) mountDaily(r chi.Router) {
 	dd := &dailyServer{
 		srv:      s,
 		store:    daily.NewStore(s.db),
-		w:        wordsPkg{},
 		salt:     getEnv("DAILY_SALT", "local_dev_salt"),
 		sessions: make(map[string]*dailySession),
 	}
-
 	r.Route("/daily", func(r chi.Router) {
 		r.Post("/new", dd.handleNew)
 		r.Post("/guess", dd.handleGuess)
@@ -65,29 +46,25 @@ func (s *Server) mountDaily(r chi.Router) {
 	})
 }
 
-// helpers
-
 func (d *dailyServer) dateKeyNow() (date string, idx int, answer string) {
 	now := time.Now().UTC()
 	date = daily.DateKey(now)
-	ans := d.w.Answers()
-	if len(ans) == 0 {
-		return date, 0, "" // shouldn't happen
+	answers := words.Answers()
+	if len(answers) == 0 {
+		return date, 0, ""
 	}
-	idx = daily.WordIndex(now, d.salt, len(ans))
-	return date, idx, ans[idx]
+	idx = daily.WordIndex(now, d.salt, len(answers))
+	return date, idx, answers[idx]
 }
 
-// userIDWithAnon returns the authed user id if present, otherwise creates/returns anon id
 func (d *dailyServer) userIDWithAnon(w http.ResponseWriter, r *http.Request) (string, bool) {
 	if me, _ := r.Context().Value(ctxUserKey{}).(*authUser); me != nil {
 		return me.ID, true
 	}
-	// guests allowed; we’ll use the anon cookie as user id
 	return d.srv.ensureAnonID(w, r), true
 }
 
-// ---- /daily/new -----------------------------------------------------------
+// ---- /daily/new ----
 
 type newRes struct {
 	GameID string `json:"gameId"`
@@ -103,12 +80,13 @@ func (d *dailyServer) handleNew(w http.ResponseWriter, r *http.Request) {
 	}
 	date, idx, answer := d.dateKeyNow()
 
-	// deny if already submitted
+	// already played?
 	if played, err := d.store.AlreadyPlayed(r.Context(), uid, date); err == nil && played {
 		_ = json.NewEncoder(w).Encode(newRes{GameID: "", Date: date, Played: true})
 		return
 	}
 
+	// reuse or create session
 	key := uid + "|" + date
 	d.mu.Lock()
 	if sess, ok := d.sessions[key]; ok {
@@ -117,11 +95,11 @@ func (d *dailyServer) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sess := &dailySession{
-		GameID:    genID(), // from server.go (same package)
+		GameID:    genID(),
 		UserID:    uid,
 		Date:      date,
 		WordIndex: idx,
-		Answer:    answer,
+		Answer:    strings.ToLower(answer),
 		Start:     time.Now(),
 	}
 	d.sessions[key] = sess
@@ -130,7 +108,7 @@ func (d *dailyServer) handleNew(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(newRes{GameID: sess.GameID, Date: date, Played: false})
 }
 
-// ---- /daily/guess ---------------------------------------------------------
+// ---- /daily/guess ----
 
 type dailyGuessReq struct {
 	GameID string `json:"gameId"`
@@ -138,8 +116,8 @@ type dailyGuessReq struct {
 }
 
 type dailyGuessRes struct {
-	Marks   []int  `json:"marks"`
-	State   string `json:"state"` // in_progress|won|locked
+	Marks   []int  `json:"marks"`  // 0 miss, 1 present, 2 hit
+	State   string `json:"state"`  // in_progress|won|locked
 	Guesses int    `json:"guesses"`
 }
 
@@ -163,7 +141,7 @@ func (d *dailyServer) handleGuess(w http.ResponseWriter, r *http.Request) {
 
 	date, _, _ := d.dateKeyNow()
 
-	// lookup session
+	// find session
 	key := uid + "|" + date
 	d.mu.Lock()
 	sess, ok := d.sessions[key]
@@ -177,15 +155,14 @@ func (d *dailyServer) handleGuess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// validate guess word  (FIX: check map membership correctly)
-	if _, ok := d.w.Allowed()[p.Word]; !ok {
+	// validate & score via words
+	if _, ok := words.Allowed()[p.Word]; !ok {
 		http.Error(w, "word not allowed", http.StatusBadRequest)
 		return
 	}
+	marks := words.Score(p.Word, sess.Answer)
 
-	marks := d.w.Score(p.Word, sess.Answer)
-
-	// update counters
+	// update
 	d.mu.Lock()
 	sess.Guesses++
 	won := allHits(marks)
@@ -194,7 +171,7 @@ func (d *dailyServer) handleGuess(w http.ResponseWriter, r *http.Request) {
 	}
 	d.mu.Unlock()
 
-	// persist result on win
+	// persist on win
 	if won {
 		elapsed := int(time.Since(sess.Start).Milliseconds())
 		_ = d.store.InsertResult(r.Context(), daily.Result{
@@ -216,11 +193,11 @@ func allHits(m []int) bool {
 	return true
 }
 
-// ---- /daily/leaderboard ---------------------------------------------------
+// ---- /daily/leaderboard ----
 
 type lbRes struct {
-	Date string         `json:"date"`
-	Top  []daily.LBRow  `json:"top"`
+	Date string        `json:"date"`
+	Top  []daily.LBRow `json:"top"`
 }
 
 func (d *dailyServer) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
